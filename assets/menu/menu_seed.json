@@ -1,0 +1,6544 @@
+{
+  "_meta": {
+    "schema": "aluchop.menu_seed/1",
+    "restaurant": "AluChop - Multi-Cuisine Restaurant & Bar",
+    "location": "Jhamsikhel, Lalitpur, Kathmandu Valley, Nepal",
+    "currency": "NPR",
+    "price_encoding": "integer paisa (100 paisa = Rs 1); never a floating-point value",
+    "tax_note": "All prices are TAX-INCLUSIVE. No code path may add tax on top of a menu price.",
+    "image_convention": "image_path is empty because no artwork ships with the project; drop files at assets/images/menu/<image_slug>.jpg and set image_path to use them.",
+    "compat_note": "Each item repeats image_path/is_available as image/available so models::MenuItem::fromJson can read it unchanged.",
+    "generated_for": "ENCT151 OOP coursework - Shashank Bhattarai (ACE082BCT078)",
+    "counts": {
+      "categories": 14,
+      "items": 126,
+      "ingredients": 157,
+      "suppliers": 6
+    }
+  },
+  "categories": [
+    "Sushi",
+    "Pizza",
+    "Pasta",
+    "Main Course",
+    "Dimsum",
+    "From the Tandoor",
+    "From the Wok",
+    "Bread & Rice",
+    "Dessert",
+    "Drinks",
+    "Beer",
+    "Wine",
+    "Mocktails",
+    "Shots"
+  ],
+  "suppliers": [
+    {
+      "name": "Himalayan Fresh Produce",
+      "phone": "+977-1-4412280",
+      "email": "orders@himalayanfresh.com.np",
+      "address": "Kalimati Fruit & Vegetable Market, Kalimati, Kathmandu",
+      "contact_person": "Ramesh Shrestha",
+      "notes": "Daily vegetables, fruits and fresh herbs."
+    },
+    {
+      "name": "Kathmandu Meat & Poultry House",
+      "phone": "+977-1-4783115",
+      "email": "supply@ktmmeat.com.np",
+      "address": "Chabahil Chowk, Kathmandu",
+      "contact_person": "Bikash Tamang",
+      "notes": "Chicken, buff, pork, mutton, yak and cured meats."
+    },
+    {
+      "name": "Everest Seafood Imports",
+      "phone": "+977-1-5551742",
+      "email": "sales@everestseafood.com.np",
+      "address": "Balkumari Industrial Area, Lalitpur",
+      "contact_person": "Anjali Gurung",
+      "notes": "Air-flown salmon, tuna, prawns and frozen seafood."
+    },
+    {
+      "name": "Nepal Dairy & Creamery",
+      "phone": "+977-1-4991630",
+      "email": "orders@nepaldairy.com.np",
+      "address": "Balaju Industrial District, Kathmandu",
+      "contact_person": "Sita Adhikari",
+      "notes": "Milk, cream, butter, paneer, imported and local cheeses."
+    },
+    {
+      "name": "Annapurna Dry Goods & Spices",
+      "phone": "+977-1-4256093",
+      "email": "info@annapurnadrygoods.com.np",
+      "address": "Asan Bazaar, Kathmandu",
+      "contact_person": "Krishna Maharjan",
+      "notes": "Rice, flour, pasta, oils, spices and pantry staples."
+    },
+    {
+      "name": "Bagmati Beverage Distributors",
+      "phone": "+977-1-5320884",
+      "email": "trade@bagmatibev.com.np",
+      "address": "Teku Road, Kathmandu",
+      "contact_person": "Dipesh Rana",
+      "notes": "Licensed beer, wine, spirits, syrups and mixers."
+    }
+  ],
+  "ingredients": [
+    {
+      "name": "Tomato",
+      "unit": "kg",
+      "stock_quantity": 40,
+      "reorder_level": 10,
+      "cost_per_unit_paisa": 12000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 7
+    },
+    {
+      "name": "Onion",
+      "unit": "kg",
+      "stock_quantity": 60,
+      "reorder_level": 15,
+      "cost_per_unit_paisa": 9000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 21
+    },
+    {
+      "name": "Garlic",
+      "unit": "kg",
+      "stock_quantity": 12,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 28000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 30
+    },
+    {
+      "name": "Ginger",
+      "unit": "kg",
+      "stock_quantity": 10,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 24000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 21
+    },
+    {
+      "name": "Green Chilli",
+      "unit": "kg",
+      "stock_quantity": 6,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 18000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 7
+    },
+    {
+      "name": "Capsicum",
+      "unit": "kg",
+      "stock_quantity": 15,
+      "reorder_level": 4,
+      "cost_per_unit_paisa": 16000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 8
+    },
+    {
+      "name": "Mushroom",
+      "unit": "kg",
+      "stock_quantity": 12,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 45000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 5
+    },
+    {
+      "name": "Avocado",
+      "unit": "pcs",
+      "stock_quantity": 40,
+      "reorder_level": 12,
+      "cost_per_unit_paisa": 22000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 6
+    },
+    {
+      "name": "Cucumber",
+      "unit": "kg",
+      "stock_quantity": 14,
+      "reorder_level": 4,
+      "cost_per_unit_paisa": 8000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 7
+    },
+    {
+      "name": "Lemon",
+      "unit": "pcs",
+      "stock_quantity": 120,
+      "reorder_level": 30,
+      "cost_per_unit_paisa": 1500,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 14
+    },
+    {
+      "name": "Lime",
+      "unit": "pcs",
+      "stock_quantity": 150,
+      "reorder_level": 40,
+      "cost_per_unit_paisa": 1200,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 14
+    },
+    {
+      "name": "Mint Leaves",
+      "unit": "bunch",
+      "stock_quantity": 30,
+      "reorder_level": 8,
+      "cost_per_unit_paisa": 3000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 4
+    },
+    {
+      "name": "Coriander Leaves",
+      "unit": "bunch",
+      "stock_quantity": 30,
+      "reorder_level": 8,
+      "cost_per_unit_paisa": 2500,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 4
+    },
+    {
+      "name": "Basil Leaves",
+      "unit": "bunch",
+      "stock_quantity": 20,
+      "reorder_level": 5,
+      "cost_per_unit_paisa": 9000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 4
+    },
+    {
+      "name": "Spring Onion",
+      "unit": "bunch",
+      "stock_quantity": 25,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 3500,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 6
+    },
+    {
+      "name": "Carrot",
+      "unit": "kg",
+      "stock_quantity": 20,
+      "reorder_level": 5,
+      "cost_per_unit_paisa": 9500,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 14
+    },
+    {
+      "name": "Cabbage",
+      "unit": "kg",
+      "stock_quantity": 18,
+      "reorder_level": 5,
+      "cost_per_unit_paisa": 6000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 12
+    },
+    {
+      "name": "Potato",
+      "unit": "kg",
+      "stock_quantity": 50,
+      "reorder_level": 12,
+      "cost_per_unit_paisa": 7000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 30
+    },
+    {
+      "name": "Spinach",
+      "unit": "kg",
+      "stock_quantity": 10,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 8000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 4
+    },
+    {
+      "name": "Sweet Corn",
+      "unit": "kg",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 15000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 10
+    },
+    {
+      "name": "Green Apple",
+      "unit": "pcs",
+      "stock_quantity": 60,
+      "reorder_level": 15,
+      "cost_per_unit_paisa": 4500,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 20
+    },
+    {
+      "name": "Watermelon",
+      "unit": "kg",
+      "stock_quantity": 25,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 7500,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 8
+    },
+    {
+      "name": "Orange",
+      "unit": "pcs",
+      "stock_quantity": 80,
+      "reorder_level": 20,
+      "cost_per_unit_paisa": 4000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 14
+    },
+    {
+      "name": "Strawberry",
+      "unit": "kg",
+      "stock_quantity": 5,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 90000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 4
+    },
+    {
+      "name": "Seasonal Fruit Mix",
+      "unit": "kg",
+      "stock_quantity": 15,
+      "reorder_level": 4,
+      "cost_per_unit_paisa": 18000,
+      "supplier_name": "Himalayan Fresh Produce",
+      "expiry_days": 5
+    },
+    {
+      "name": "Chicken Breast",
+      "unit": "kg",
+      "stock_quantity": 35,
+      "reorder_level": 8,
+      "cost_per_unit_paisa": 52000,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 4
+    },
+    {
+      "name": "Chicken Thigh",
+      "unit": "kg",
+      "stock_quantity": 25,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 44000,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 4
+    },
+    {
+      "name": "Whole Chicken",
+      "unit": "kg",
+      "stock_quantity": 20,
+      "reorder_level": 5,
+      "cost_per_unit_paisa": 42000,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 3
+    },
+    {
+      "name": "Buff Mince",
+      "unit": "kg",
+      "stock_quantity": 22,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 38000,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 3
+    },
+    {
+      "name": "Pork Belly",
+      "unit": "kg",
+      "stock_quantity": 15,
+      "reorder_level": 4,
+      "cost_per_unit_paisa": 62000,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 4
+    },
+    {
+      "name": "Pork Ribs",
+      "unit": "kg",
+      "stock_quantity": 12,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 68000,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 4
+    },
+    {
+      "name": "Mutton",
+      "unit": "kg",
+      "stock_quantity": 14,
+      "reorder_level": 4,
+      "cost_per_unit_paisa": 115000,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 4
+    },
+    {
+      "name": "Lamb Shank",
+      "unit": "kg",
+      "stock_quantity": 10,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 135000,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 5
+    },
+    {
+      "name": "Yak Meat",
+      "unit": "kg",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 98000,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 5
+    },
+    {
+      "name": "Pepperoni",
+      "unit": "kg",
+      "stock_quantity": 6,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 145000,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 45
+    },
+    {
+      "name": "Yak Sausage",
+      "unit": "kg",
+      "stock_quantity": 5,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 125000,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 20
+    },
+    {
+      "name": "Eggs",
+      "unit": "pcs",
+      "stock_quantity": 240,
+      "reorder_level": 60,
+      "cost_per_unit_paisa": 2200,
+      "supplier_name": "Kathmandu Meat & Poultry House",
+      "expiry_days": 21
+    },
+    {
+      "name": "Salmon Fillet",
+      "unit": "kg",
+      "stock_quantity": 12,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 285000,
+      "supplier_name": "Everest Seafood Imports",
+      "expiry_days": 4
+    },
+    {
+      "name": "Tuna Loin",
+      "unit": "kg",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 320000,
+      "supplier_name": "Everest Seafood Imports",
+      "expiry_days": 4
+    },
+    {
+      "name": "Prawns",
+      "unit": "kg",
+      "stock_quantity": 10,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 195000,
+      "supplier_name": "Everest Seafood Imports",
+      "expiry_days": 6
+    },
+    {
+      "name": "Bhetki Fish Fillet",
+      "unit": "kg",
+      "stock_quantity": 9,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 148000,
+      "supplier_name": "Everest Seafood Imports",
+      "expiry_days": 5
+    },
+    {
+      "name": "Squid",
+      "unit": "kg",
+      "stock_quantity": 6,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 92000,
+      "supplier_name": "Everest Seafood Imports",
+      "expiry_days": 5
+    },
+    {
+      "name": "Crab Stick",
+      "unit": "kg",
+      "stock_quantity": 6,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 88000,
+      "supplier_name": "Everest Seafood Imports",
+      "expiry_days": 30
+    },
+    {
+      "name": "Tobiko",
+      "unit": "kg",
+      "stock_quantity": 2,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 420000,
+      "supplier_name": "Everest Seafood Imports",
+      "expiry_days": 30
+    },
+    {
+      "name": "Mozzarella Cheese",
+      "unit": "kg",
+      "stock_quantity": 25,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 98000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 20
+    },
+    {
+      "name": "Cheddar Cheese",
+      "unit": "kg",
+      "stock_quantity": 12,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 112000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 25
+    },
+    {
+      "name": "Parmesan Cheese",
+      "unit": "kg",
+      "stock_quantity": 5,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 235000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 40
+    },
+    {
+      "name": "Gorgonzola Cheese",
+      "unit": "kg",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 265000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 30
+    },
+    {
+      "name": "Cream Cheese",
+      "unit": "kg",
+      "stock_quantity": 6,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 125000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 15
+    },
+    {
+      "name": "Mascarpone Cheese",
+      "unit": "kg",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 168000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 15
+    },
+    {
+      "name": "Paneer",
+      "unit": "kg",
+      "stock_quantity": 14,
+      "reorder_level": 4,
+      "cost_per_unit_paisa": 68000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 6
+    },
+    {
+      "name": "Butter",
+      "unit": "kg",
+      "stock_quantity": 18,
+      "reorder_level": 5,
+      "cost_per_unit_paisa": 92000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 30
+    },
+    {
+      "name": "Fresh Cream",
+      "unit": "l",
+      "stock_quantity": 20,
+      "reorder_level": 5,
+      "cost_per_unit_paisa": 55000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 10
+    },
+    {
+      "name": "Milk",
+      "unit": "l",
+      "stock_quantity": 60,
+      "reorder_level": 15,
+      "cost_per_unit_paisa": 11000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 4
+    },
+    {
+      "name": "Yoghurt",
+      "unit": "kg",
+      "stock_quantity": 15,
+      "reorder_level": 4,
+      "cost_per_unit_paisa": 18000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 7
+    },
+    {
+      "name": "Juju Dhau",
+      "unit": "kg",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 32000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 5
+    },
+    {
+      "name": "Vanilla Ice Cream",
+      "unit": "l",
+      "stock_quantity": 12,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 48000,
+      "supplier_name": "Nepal Dairy & Creamery",
+      "expiry_days": 60
+    },
+    {
+      "name": "Basmati Rice",
+      "unit": "kg",
+      "stock_quantity": 80,
+      "reorder_level": 20,
+      "cost_per_unit_paisa": 22000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Sushi Rice",
+      "unit": "kg",
+      "stock_quantity": 25,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 34000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Nori Sheet",
+      "unit": "pcs",
+      "stock_quantity": 400,
+      "reorder_level": 100,
+      "cost_per_unit_paisa": 900,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 180
+    },
+    {
+      "name": "Wasabi Paste",
+      "unit": "kg",
+      "stock_quantity": 2,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 185000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 180
+    },
+    {
+      "name": "Pickled Ginger",
+      "unit": "kg",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 62000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 120
+    },
+    {
+      "name": "Soy Sauce",
+      "unit": "l",
+      "stock_quantity": 12,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 42000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Rice Vinegar",
+      "unit": "l",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 38000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Sesame Seeds",
+      "unit": "kg",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 48000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 180
+    },
+    {
+      "name": "Sesame Oil",
+      "unit": "l",
+      "stock_quantity": 5,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 78000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "All-Purpose Flour",
+      "unit": "kg",
+      "stock_quantity": 70,
+      "reorder_level": 18,
+      "cost_per_unit_paisa": 9500,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 180
+    },
+    {
+      "name": "Tempura Flour",
+      "unit": "kg",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 18000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 180
+    },
+    {
+      "name": "Corn Flour",
+      "unit": "kg",
+      "stock_quantity": 10,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 12000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Yeast",
+      "unit": "kg",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 55000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 120
+    },
+    {
+      "name": "Spaghetti",
+      "unit": "kg",
+      "stock_quantity": 20,
+      "reorder_level": 5,
+      "cost_per_unit_paisa": 32000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 300
+    },
+    {
+      "name": "Penne",
+      "unit": "kg",
+      "stock_quantity": 18,
+      "reorder_level": 5,
+      "cost_per_unit_paisa": 32000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 300
+    },
+    {
+      "name": "Fettuccine",
+      "unit": "kg",
+      "stock_quantity": 12,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 36000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 300
+    },
+    {
+      "name": "Linguine",
+      "unit": "kg",
+      "stock_quantity": 12,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 36000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 300
+    },
+    {
+      "name": "Lasagna Sheets",
+      "unit": "kg",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 42000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 300
+    },
+    {
+      "name": "Macaroni",
+      "unit": "kg",
+      "stock_quantity": 10,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 30000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 300
+    },
+    {
+      "name": "Egg Noodles",
+      "unit": "kg",
+      "stock_quantity": 22,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 21000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 180
+    },
+    {
+      "name": "Dumpling Wrapper",
+      "unit": "pcs",
+      "stock_quantity": 900,
+      "reorder_level": 200,
+      "cost_per_unit_paisa": 400,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 30
+    },
+    {
+      "name": "Tomato Passata",
+      "unit": "l",
+      "stock_quantity": 20,
+      "reorder_level": 5,
+      "cost_per_unit_paisa": 34000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Olive Oil",
+      "unit": "l",
+      "stock_quantity": 10,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 128000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Sunflower Oil",
+      "unit": "l",
+      "stock_quantity": 40,
+      "reorder_level": 10,
+      "cost_per_unit_paisa": 24000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Truffle Oil",
+      "unit": "l",
+      "stock_quantity": 1.5,
+      "reorder_level": 0.5,
+      "cost_per_unit_paisa": 480000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Salt",
+      "unit": "kg",
+      "stock_quantity": 25,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 3000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Black Pepper",
+      "unit": "kg",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 145000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Cumin Powder",
+      "unit": "kg",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 68000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Coriander Powder",
+      "unit": "kg",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 52000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Turmeric Powder",
+      "unit": "kg",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 45000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Red Chilli Powder",
+      "unit": "kg",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 58000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Garam Masala",
+      "unit": "kg",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 88000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Tandoori Masala",
+      "unit": "kg",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 92000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Timur Pepper",
+      "unit": "kg",
+      "stock_quantity": 2,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 125000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Dried Red Chilli",
+      "unit": "kg",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 42000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Cardamom",
+      "unit": "kg",
+      "stock_quantity": 1,
+      "reorder_level": 0.5,
+      "cost_per_unit_paisa": 380000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Cinnamon",
+      "unit": "kg",
+      "stock_quantity": 2,
+      "reorder_level": 0.5,
+      "cost_per_unit_paisa": 95000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Saffron",
+      "unit": "g",
+      "stock_quantity": 80,
+      "reorder_level": 20,
+      "cost_per_unit_paisa": 45000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Szechuan Sauce",
+      "unit": "l",
+      "stock_quantity": 6,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 52000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Oyster Sauce",
+      "unit": "l",
+      "stock_quantity": 5,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 58000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Chilli Sauce",
+      "unit": "l",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 38000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Tomato Ketchup",
+      "unit": "l",
+      "stock_quantity": 12,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 28000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Mayonnaise",
+      "unit": "kg",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 42000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 90
+    },
+    {
+      "name": "Fish Sauce",
+      "unit": "l",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 48000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Coconut Milk",
+      "unit": "l",
+      "stock_quantity": 10,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 34000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 300
+    },
+    {
+      "name": "Thai Green Curry Paste",
+      "unit": "kg",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 96000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 180
+    },
+    {
+      "name": "Black Olives",
+      "unit": "kg",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 85000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 180
+    },
+    {
+      "name": "Sugar",
+      "unit": "kg",
+      "stock_quantity": 40,
+      "reorder_level": 10,
+      "cost_per_unit_paisa": 11000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Brown Sugar",
+      "unit": "kg",
+      "stock_quantity": 10,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 16000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Honey",
+      "unit": "l",
+      "stock_quantity": 5,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 95000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Sugar Syrup",
+      "unit": "l",
+      "stock_quantity": 10,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 18000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 90
+    },
+    {
+      "name": "Dark Chocolate",
+      "unit": "kg",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 165000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 180
+    },
+    {
+      "name": "Cocoa Powder",
+      "unit": "kg",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 118000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 240
+    },
+    {
+      "name": "Digestive Biscuit",
+      "unit": "kg",
+      "stock_quantity": 5,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 62000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 120
+    },
+    {
+      "name": "Ladyfinger Biscuit",
+      "unit": "kg",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 88000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 120
+    },
+    {
+      "name": "Gelatin",
+      "unit": "kg",
+      "stock_quantity": 1.5,
+      "reorder_level": 0.5,
+      "cost_per_unit_paisa": 155000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Gulab Jamun Mix",
+      "unit": "kg",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 58000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 180
+    },
+    {
+      "name": "Vanilla Extract",
+      "unit": "l",
+      "stock_quantity": 1.5,
+      "reorder_level": 0.5,
+      "cost_per_unit_paisa": 240000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 365
+    },
+    {
+      "name": "Black Tea Leaves",
+      "unit": "kg",
+      "stock_quantity": 6,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 68000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 180
+    },
+    {
+      "name": "Coffee Beans",
+      "unit": "kg",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 145000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 90
+    },
+    {
+      "name": "Cashew Nuts",
+      "unit": "kg",
+      "stock_quantity": 5,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 165000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 120
+    },
+    {
+      "name": "Almonds",
+      "unit": "kg",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 158000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 120
+    },
+    {
+      "name": "Pistachio",
+      "unit": "kg",
+      "stock_quantity": 2,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 285000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 120
+    },
+    {
+      "name": "Peanuts",
+      "unit": "kg",
+      "stock_quantity": 5,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 42000,
+      "supplier_name": "Annapurna Dry Goods & Spices",
+      "expiry_days": 120
+    },
+    {
+      "name": "Gorkha Premium 650ml Bottle",
+      "unit": "pcs",
+      "stock_quantity": 120,
+      "reorder_level": 24,
+      "cost_per_unit_paisa": 32000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 180
+    },
+    {
+      "name": "Everest Lager 650ml Bottle",
+      "unit": "pcs",
+      "stock_quantity": 110,
+      "reorder_level": 24,
+      "cost_per_unit_paisa": 31000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 180
+    },
+    {
+      "name": "Nepal Ice Strong 650ml Bottle",
+      "unit": "pcs",
+      "stock_quantity": 100,
+      "reorder_level": 24,
+      "cost_per_unit_paisa": 30000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 180
+    },
+    {
+      "name": "Barahsinghe Lager 330ml Can",
+      "unit": "pcs",
+      "stock_quantity": 90,
+      "reorder_level": 24,
+      "cost_per_unit_paisa": 26000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 180
+    },
+    {
+      "name": "Barahsinghe Hazy IPA 330ml Can",
+      "unit": "pcs",
+      "stock_quantity": 18,
+      "reorder_level": 18,
+      "cost_per_unit_paisa": 34000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 120
+    },
+    {
+      "name": "Tuborg Draught Keg",
+      "unit": "l",
+      "stock_quantity": 60,
+      "reorder_level": 15,
+      "cost_per_unit_paisa": 22000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 45
+    },
+    {
+      "name": "Carlsberg Green 330ml Bottle",
+      "unit": "pcs",
+      "stock_quantity": 72,
+      "reorder_level": 18,
+      "cost_per_unit_paisa": 36000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 180
+    },
+    {
+      "name": "Corona Extra 355ml Bottle",
+      "unit": "pcs",
+      "stock_quantity": 60,
+      "reorder_level": 18,
+      "cost_per_unit_paisa": 52000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 240
+    },
+    {
+      "name": "Hoegaarden 330ml Bottle",
+      "unit": "pcs",
+      "stock_quantity": 48,
+      "reorder_level": 12,
+      "cost_per_unit_paisa": 55000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 240
+    },
+    {
+      "name": "House Red Wine",
+      "unit": "l",
+      "stock_quantity": 24,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 78000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 180
+    },
+    {
+      "name": "House White Wine",
+      "unit": "l",
+      "stock_quantity": 24,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 78000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 180
+    },
+    {
+      "name": "Jacob's Creek Shiraz Cabernet Bottle",
+      "unit": "pcs",
+      "stock_quantity": 24,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 260000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 730
+    },
+    {
+      "name": "Jacob's Creek Chardonnay Bottle",
+      "unit": "pcs",
+      "stock_quantity": 20,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 255000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 730
+    },
+    {
+      "name": "Casillero del Diablo Merlot Bottle",
+      "unit": "pcs",
+      "stock_quantity": 18,
+      "reorder_level": 4,
+      "cost_per_unit_paisa": 340000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 730
+    },
+    {
+      "name": "Oyster Bay Sauvignon Blanc Bottle",
+      "unit": "pcs",
+      "stock_quantity": 0,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 450000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 730
+    },
+    {
+      "name": "19 Crimes Red Blend Bottle",
+      "unit": "pcs",
+      "stock_quantity": 14,
+      "reorder_level": 4,
+      "cost_per_unit_paisa": 420000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 730
+    },
+    {
+      "name": "Villa Antinori Chianti Bottle",
+      "unit": "pcs",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 560000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 1095
+    },
+    {
+      "name": "Prosecco Brut Bottle",
+      "unit": "pcs",
+      "stock_quantity": 12,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 480000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 540
+    },
+    {
+      "name": "Tequila Gold",
+      "unit": "l",
+      "stock_quantity": 6,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 420000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 1095
+    },
+    {
+      "name": "Vodka",
+      "unit": "l",
+      "stock_quantity": 8,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 320000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 1095
+    },
+    {
+      "name": "Jagermeister",
+      "unit": "l",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 480000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 1095
+    },
+    {
+      "name": "Fireball Cinnamon Whisky",
+      "unit": "l",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 460000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 1095
+    },
+    {
+      "name": "Absinthe",
+      "unit": "l",
+      "stock_quantity": 0,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 720000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 1095
+    },
+    {
+      "name": "Kahlua Coffee Liqueur",
+      "unit": "l",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 520000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 730
+    },
+    {
+      "name": "Baileys Irish Cream",
+      "unit": "l",
+      "stock_quantity": 3,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 540000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 365
+    },
+    {
+      "name": "Grand Marnier",
+      "unit": "l",
+      "stock_quantity": 2,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 680000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 1095
+    },
+    {
+      "name": "Triple Sec",
+      "unit": "l",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 280000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 1095
+    },
+    {
+      "name": "Local Raksi",
+      "unit": "l",
+      "stock_quantity": 10,
+      "reorder_level": 3,
+      "cost_per_unit_paisa": 65000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 365
+    },
+    {
+      "name": "Grenadine Syrup",
+      "unit": "l",
+      "stock_quantity": 5,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 55000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 365
+    },
+    {
+      "name": "Blue Curacao Syrup",
+      "unit": "l",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 62000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 365
+    },
+    {
+      "name": "Passion Fruit Syrup",
+      "unit": "l",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 68000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 365
+    },
+    {
+      "name": "Green Apple Syrup",
+      "unit": "l",
+      "stock_quantity": 4,
+      "reorder_level": 1,
+      "cost_per_unit_paisa": 60000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 365
+    },
+    {
+      "name": "Mixed Berry Puree",
+      "unit": "l",
+      "stock_quantity": 5,
+      "reorder_level": 2,
+      "cost_per_unit_paisa": 88000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 90
+    },
+    {
+      "name": "Soda Water",
+      "unit": "l",
+      "stock_quantity": 30,
+      "reorder_level": 8,
+      "cost_per_unit_paisa": 12000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 240
+    },
+    {
+      "name": "Sprite",
+      "unit": "l",
+      "stock_quantity": 25,
+      "reorder_level": 6,
+      "cost_per_unit_paisa": 14000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 180
+    },
+    {
+      "name": "Mineral Water 1L Bottle",
+      "unit": "pcs",
+      "stock_quantity": 150,
+      "reorder_level": 40,
+      "cost_per_unit_paisa": 3000,
+      "supplier_name": "Bagmati Beverage Distributors",
+      "expiry_days": 365
+    }
+  ],
+  "items": [
+    {
+      "id": 1,
+      "name": "Salmon Nigiri (2 pcs)",
+      "category": "Sushi",
+      "price_paisa": 55000,
+      "description": "Two pillows of vinegared rice crowned with silky, cold-smoked Norwegian salmon.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 10,
+      "image_path": "",
+      "image_slug": "salmon-nigiri-2-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Salmon Fillet",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sushi Rice",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Rice Vinegar",
+          "quantity": 0.01,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Wasabi Paste",
+          "quantity": 0.005,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Tuna Nigiri (2 pcs)",
+      "category": "Sushi",
+      "price_paisa": 62000,
+      "description": "Ruby-red tuna loin sliced to order and pressed over warm sushi rice.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 10,
+      "image_path": "",
+      "image_slug": "tuna-nigiri-2-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Tuna Loin",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sushi Rice",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Rice Vinegar",
+          "quantity": 0.01,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Pickled Ginger",
+          "quantity": 0.01,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "California Roll (8 pcs)",
+      "category": "Sushi",
+      "price_paisa": 75000,
+      "description": "The classic inside-out roll of crab, buttery avocado and crisp cucumber, rolled in sesame rice.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 14,
+      "image_path": "",
+      "image_slug": "california-roll-8-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Crab Stick",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Avocado",
+          "quantity": 0.5,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Cucumber",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sushi Rice",
+          "quantity": 0.15,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Nori Sheet",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Mayonnaise",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sesame Seeds",
+          "quantity": 0.005,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Ebi Tempura Roll (8 pcs)",
+      "category": "Sushi",
+      "price_paisa": 89000,
+      "description": "Golden tempura prawns rolled with rice and nori, finished with a drizzle of house mayo.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 16,
+      "image_path": "",
+      "image_slug": "ebi-tempura-roll-8-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Prawns",
+          "quantity": 0.1,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tempura Flour",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sushi Rice",
+          "quantity": 0.15,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Nori Sheet",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.08,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Mayonnaise",
+          "quantity": 0.02,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Spicy Tuna Maki (6 pcs)",
+      "category": "Sushi",
+      "price_paisa": 82000,
+      "description": "Chopped tuna tossed in a bright chilli dressing and rolled tight with spring onion.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 14,
+      "image_path": "",
+      "image_slug": "spicy-tuna-maki-6-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Tuna Loin",
+          "quantity": 0.09,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sushi Rice",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Nori Sheet",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Chilli Sauce",
+          "quantity": 0.02,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Spring Onion",
+          "quantity": 0.1,
+          "unit": "bunch"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Dragon Roll (8 pcs)",
+      "category": "Sushi",
+      "price_paisa": 115000,
+      "description": "Prawn and cucumber roll cloaked in fanned avocado scales and beaded with tobiko.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "dragon-roll-8-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Prawns",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Avocado",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Sushi Rice",
+          "quantity": 0.15,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Nori Sheet",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Tobiko",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Soy Sauce",
+          "quantity": 0.02,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Vegetable Avocado Maki (6 pcs)",
+      "category": "Sushi",
+      "price_paisa": 58000,
+      "description": "Creamy avocado, cucumber and julienned carrot wrapped in seasoned rice and crisp nori.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 12,
+      "image_path": "",
+      "image_slug": "vegetable-avocado-maki-6-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Avocado",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Cucumber",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Carrot",
+          "quantity": 0.04,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sushi Rice",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Nori Sheet",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Salmon Sashimi (5 slices)",
+      "category": "Sushi",
+      "price_paisa": 98000,
+      "description": "Five generous slices of pure salmon, chilled, glossy and served with wasabi and pickled ginger.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 8,
+      "image_path": "",
+      "image_slug": "salmon-sashimi-5-slices",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Salmon Fillet",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Wasabi Paste",
+          "quantity": 0.005,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Pickled Ginger",
+          "quantity": 0.015,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Soy Sauce",
+          "quantity": 0.02,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "AluChop Signature Sushi Platter (16 pcs)",
+      "category": "Sushi",
+      "price_paisa": 189500,
+      "description": "The chef's full sweep of the sushi counter: salmon, tuna, prawn and tobiko, built to share.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 25,
+      "image_path": "",
+      "image_slug": "aluchop-signature-sushi-platter-16-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Salmon Fillet",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tuna Loin",
+          "quantity": 0.1,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Prawns",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sushi Rice",
+          "quantity": 0.3,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Nori Sheet",
+          "quantity": 3,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Tobiko",
+          "quantity": 0.015,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Avocado",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Margherita",
+      "category": "Pizza",
+      "price_paisa": 62000,
+      "description": "Slow-proved dough, sweet San Marzano-style passata, milky mozzarella and torn basil.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 15,
+      "image_path": "",
+      "image_slug": "margherita",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yeast",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.12,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Mozzarella Cheese",
+          "quantity": 0.15,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Basil Leaves",
+          "quantity": 0.1,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Olive Oil",
+          "quantity": 0.02,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Pepperoni Classic",
+      "category": "Pizza",
+      "price_paisa": 82000,
+      "description": "Curled, spice-edged pepperoni over molten mozzarella on a blistered thin crust.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 15,
+      "image_path": "",
+      "image_slug": "pepperoni-classic",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yeast",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.12,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Mozzarella Cheese",
+          "quantity": 0.16,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Pepperoni",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Olive Oil",
+          "quantity": 0.02,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Chicken Tikka Pizza",
+      "category": "Pizza",
+      "price_paisa": 89000,
+      "description": "Charred tandoori chicken, onion and capsicum on a smoky masala base.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "chicken-tikka-pizza",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yeast",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.1,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Mozzarella Cheese",
+          "quantity": 0.15,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Chicken Breast",
+          "quantity": 0.14,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tandoori Masala",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.05,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "name": "Four Cheese",
+      "category": "Pizza",
+      "price_paisa": 92000,
+      "description": "Mozzarella, cheddar, parmesan and a bold streak of gorgonzola melted into cream.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 16,
+      "image_path": "",
+      "image_slug": "four-cheese",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yeast",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Mozzarella Cheese",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cheddar Cheese",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Parmesan Cheese",
+          "quantity": 0.04,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Gorgonzola Cheese",
+          "quantity": 0.04,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.05,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Farmhouse Veggie",
+      "category": "Pizza",
+      "price_paisa": 74500,
+      "description": "A garden's worth of mushroom, capsicum, corn, onion and olives on tomato and mozzarella.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 16,
+      "image_path": "",
+      "image_slug": "farmhouse-veggie",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yeast",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.12,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Mozzarella Cheese",
+          "quantity": 0.14,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Mushroom",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sweet Corn",
+          "quantity": 0.04,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Black Olives",
+          "quantity": 0.03,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "name": "BBQ Chicken",
+      "category": "Pizza",
+      "price_paisa": 88000,
+      "description": "Smoky barbecue sauce, pulled chicken thigh and sweet red onion under bubbling cheese.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 17,
+      "image_path": "",
+      "image_slug": "bbq-chicken",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yeast",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Mozzarella Cheese",
+          "quantity": 0.15,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Chicken Thigh",
+          "quantity": 0.14,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Ketchup",
+          "quantity": 0.05,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Brown Sugar",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.05,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Spicy Yak Sausage",
+      "category": "Pizza",
+      "price_paisa": 98000,
+      "description": "House-cured yak sausage with green chilli and a numbing lift of Himalayan timur.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "spicy-yak-sausage",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yeast",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.12,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Mozzarella Cheese",
+          "quantity": 0.15,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yak Sausage",
+          "quantity": 0.1,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Green Chilli",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Timur Pepper",
+          "quantity": 0.003,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Truffle Mushroom",
+      "category": "Pizza",
+      "price_paisa": 105000,
+      "description": "Cream-baked mushrooms, parmesan and a finishing thread of black truffle oil.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "truffle-mushroom",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yeast",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Mozzarella Cheese",
+          "quantity": 0.14,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Mushroom",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Truffle Oil",
+          "quantity": 0.008,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.06,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Parmesan Cheese",
+          "quantity": 0.03,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Seafood Marinara",
+      "category": "Pizza",
+      "price_paisa": 112000,
+      "description": "Prawns and tender squid over garlicky tomato, finished with basil straight off the plant.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 20,
+      "image_path": "",
+      "image_slug": "seafood-marinara",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yeast",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.12,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Mozzarella Cheese",
+          "quantity": 0.14,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Prawns",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Squid",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Basil Leaves",
+          "quantity": 0.05,
+          "unit": "bunch"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "name": "Spaghetti Aglio e Olio",
+      "category": "Pasta",
+      "price_paisa": 55000,
+      "description": "Spaghetti glossed in olive oil, toasted garlic and a whisper of chilli.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 14,
+      "image_path": "",
+      "image_slug": "spaghetti-aglio-e-olio",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Spaghetti",
+          "quantity": 0.16,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Olive Oil",
+          "quantity": 0.04,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Dried Red Chilli",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Basil Leaves",
+          "quantity": 0.05,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Parmesan Cheese",
+          "quantity": 0.02,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "name": "Penne Arrabbiata",
+      "category": "Pasta",
+      "price_paisa": 58500,
+      "description": "Angry little tubes of penne in a fiery tomato and garlic sugo.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": true,
+      "prep_minutes": 15,
+      "image_path": "",
+      "image_slug": "penne-arrabbiata",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Penne",
+          "quantity": 0.16,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.15,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.015,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Dried Red Chilli",
+          "quantity": 0.005,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Olive Oil",
+          "quantity": 0.02,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Basil Leaves",
+          "quantity": 0.04,
+          "unit": "bunch"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "name": "Chicken Alfredo Fettuccine",
+      "category": "Pasta",
+      "price_paisa": 78000,
+      "description": "Ribbons of fettuccine folded through a parmesan cream with seared chicken.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "chicken-alfredo-fettuccine",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Fettuccine",
+          "quantity": 0.16,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Chicken Breast",
+          "quantity": 0.13,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.12,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Parmesan Cheese",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.01,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "name": "Spaghetti Bolognese",
+      "category": "Pasta",
+      "price_paisa": 82000,
+      "description": "A patient, three-hour buff ragu spooned over spaghetti and showered with parmesan.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 20,
+      "image_path": "",
+      "image_slug": "spaghetti-bolognese",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Spaghetti",
+          "quantity": 0.16,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Buff Mince",
+          "quantity": 0.13,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.15,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Olive Oil",
+          "quantity": 0.02,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Parmesan Cheese",
+          "quantity": 0.02,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "name": "Creamy Mushroom Penne",
+      "category": "Pasta",
+      "price_paisa": 69500,
+      "description": "Button mushrooms simmered in garlic cream until they coat every last tube.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 16,
+      "image_path": "",
+      "image_slug": "creamy-mushroom-penne",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Penne",
+          "quantity": 0.16,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Mushroom",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.11,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Parmesan Cheese",
+          "quantity": 0.02,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "name": "Lasagna al Forno",
+      "category": "Pasta",
+      "price_paisa": 89000,
+      "description": "Layer upon layer of pasta, buff ragu and bechamel, baked until the top blisters.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 22,
+      "image_path": "",
+      "image_slug": "lasagna-al-forno",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Lasagna Sheets",
+          "quantity": 0.14,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Buff Mince",
+          "quantity": 0.14,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.15,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Mozzarella Cheese",
+          "quantity": 0.09,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Milk",
+          "quantity": 0.1,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.02,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "name": "Pesto Basil Linguine",
+      "category": "Pasta",
+      "price_paisa": 74000,
+      "description": "Linguine tossed in a stone-ground basil and cashew pesto with plenty of parmesan.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 16,
+      "image_path": "",
+      "image_slug": "pesto-basil-linguine",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Linguine",
+          "quantity": 0.16,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Basil Leaves",
+          "quantity": 0.15,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Olive Oil",
+          "quantity": 0.04,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Parmesan Cheese",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cashew Nuts",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.01,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "name": "Prawn Aglio Linguine",
+      "category": "Pasta",
+      "price_paisa": 95000,
+      "description": "Plump prawns, chilli, garlic and a squeeze of lemon over silky linguine.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "prawn-aglio-linguine",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Linguine",
+          "quantity": 0.16,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Prawns",
+          "quantity": 0.11,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Olive Oil",
+          "quantity": 0.035,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Dried Red Chilli",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Lemon",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "name": "Baked Mac & Cheese",
+      "category": "Pasta",
+      "price_paisa": 65000,
+      "description": "Macaroni drowned in aged cheddar sauce and baked under a mozzarella crust.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "baked-mac-cheese",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Macaroni",
+          "quantity": 0.16,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cheddar Cheese",
+          "quantity": 0.1,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Milk",
+          "quantity": 0.15,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.025,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Mozzarella Cheese",
+          "quantity": 0.05,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "name": "Grilled Chicken Steak",
+      "category": "Main Course",
+      "price_paisa": 89500,
+      "description": "Char-grilled chicken breast with buttered potatoes, glazed carrots and pan jus.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 22,
+      "image_path": "",
+      "image_slug": "grilled-chicken-steak",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Chicken Breast",
+          "quantity": 0.25,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Potato",
+          "quantity": 0.15,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Carrot",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Black Pepper",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.05,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "name": "Pan-Seared Norwegian Salmon",
+      "category": "Main Course",
+      "price_paisa": 165000,
+      "description": "Crisp-skinned salmon on wilted spinach with crushed potatoes and lemon butter.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 24,
+      "image_path": "",
+      "image_slug": "pan-seared-norwegian-salmon",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Salmon Fillet",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Lemon",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Potato",
+          "quantity": 0.14,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Spinach",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Black Pepper",
+          "quantity": 0.003,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "name": "Lamb Shank Rogan Josh",
+      "category": "Main Course",
+      "price_paisa": 148000,
+      "description": "A whole lamb shank braised until it slides off the bone in a deep Kashmiri gravy.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 35,
+      "image_path": "",
+      "image_slug": "lamb-shank-rogan-josh",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Lamb Shank",
+          "quantity": 0.32,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yoghurt",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garam Masala",
+          "quantity": 0.008,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Red Chilli Powder",
+          "quantity": 0.006,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Ginger",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.04,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "name": "Butter Chicken",
+      "category": "Main Course",
+      "price_paisa": 82000,
+      "description": "Tandoor-kissed chicken folded into a velvet tomato, cashew and butter gravy.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 25,
+      "image_path": "",
+      "image_slug": "butter-chicken",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Chicken Thigh",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.12,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.04,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.07,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Cashew Nuts",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garam Masala",
+          "quantity": 0.005,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Coriander Powder",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Ginger",
+          "quantity": 0.008,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "name": "Paneer Butter Masala",
+      "category": "Main Course",
+      "price_paisa": 68000,
+      "description": "Soft house paneer in a glossy, lightly sweet makhani sauce.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 20,
+      "image_path": "",
+      "image_slug": "paneer-butter-masala",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Paneer",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.12,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.035,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.06,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Cashew Nuts",
+          "quantity": 0.025,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garam Masala",
+          "quantity": 0.004,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "name": "Himalayan Yak Sizzler",
+      "category": "Main Course",
+      "price_paisa": 155000,
+      "description": "Yak medallions arriving still spitting on cast iron with timur butter and wok vegetables.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 30,
+      "image_path": "",
+      "image_slug": "himalayan-yak-sizzler",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Yak Meat",
+          "quantity": 0.25,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.07,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.07,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Timur Pepper",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Potato",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Szechuan Sauce",
+          "quantity": 0.03,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "name": "Slow-Grilled Pork Ribs",
+      "category": "Main Course",
+      "price_paisa": 138000,
+      "description": "A rack of ribs glazed in smoky barbecue and grilled until the edges caramelise.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 32,
+      "image_path": "",
+      "image_slug": "slow-grilled-pork-ribs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Pork Ribs",
+          "quantity": 0.4,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Ketchup",
+          "quantity": 0.06,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Brown Sugar",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Black Pepper",
+          "quantity": 0.003,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Potato",
+          "quantity": 0.12,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "name": "Thakali Khana Set (Chicken)",
+      "category": "Main Course",
+      "price_paisa": 79500,
+      "description": "The full Thakali tray: chicken curry, rice, dal, greens, potato achar and papad.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 25,
+      "image_path": "",
+      "image_slug": "thakali-khana-set-chicken",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Chicken Thigh",
+          "quantity": 0.18,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Basmati Rice",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Potato",
+          "quantity": 0.1,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Spinach",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Turmeric Powder",
+          "quantity": 0.003,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cumin Powder",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yoghurt",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.03,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Tomato",
+          "quantity": 0.06,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "name": "Vegetable Kofta Curry",
+      "category": "Main Course",
+      "price_paisa": 62000,
+      "description": "Hand-rolled vegetable and paneer koftas resting in a fragrant cashew cream gravy.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 24,
+      "image_path": "",
+      "image_slug": "vegetable-kofta-curry",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Potato",
+          "quantity": 0.15,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Carrot",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Paneer",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Corn Flour",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato Passata",
+          "quantity": 0.1,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.05,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Garam Masala",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.05,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "name": "Steamed Chicken Momo (10 pcs)",
+      "category": "Dimsum",
+      "price_paisa": 32000,
+      "description": "Ten hand-pleated chicken momo steamed to order, served with tomato achar.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 15,
+      "image_path": "",
+      "image_slug": "steamed-chicken-momo-10-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Dumpling Wrapper",
+          "quantity": 10,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Chicken Thigh",
+          "quantity": 0.18,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.008,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Ginger",
+          "quantity": 0.006,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Coriander Leaves",
+          "quantity": 0.15,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Timur Pepper",
+          "quantity": 0.002,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tomato",
+          "quantity": 0.08,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "name": "Steamed Vegetable Momo (10 pcs)",
+      "category": "Dimsum",
+      "price_paisa": 26000,
+      "description": "Cabbage, carrot and coriander wrapped thin and steamed until translucent.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 15,
+      "image_path": "",
+      "image_slug": "steamed-vegetable-momo-10-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Dumpling Wrapper",
+          "quantity": 10,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Cabbage",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Carrot",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.008,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Coriander Leaves",
+          "quantity": 0.15,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Tomato",
+          "quantity": 0.08,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "name": "Buff Jhol Momo (10 pcs)",
+      "category": "Dimsum",
+      "price_paisa": 34500,
+      "description": "Buff momo swimming in a warm sesame-peanut jhol with a proper chilli kick.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "buff-jhol-momo-10-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Dumpling Wrapper",
+          "quantity": 10,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Buff Mince",
+          "quantity": 0.18,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sesame Seeds",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Peanuts",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Red Chilli Powder",
+          "quantity": 0.005,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Timur Pepper",
+          "quantity": 0.002,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "name": "Pan-Fried Kothey Momo (10 pcs)",
+      "category": "Dimsum",
+      "price_paisa": 36000,
+      "description": "Half-steamed, half-fried momo with a lacy golden base and juicy buff filling.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 16,
+      "image_path": "",
+      "image_slug": "pan-fried-kothey-momo-10-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Dumpling Wrapper",
+          "quantity": 10,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Buff Mince",
+          "quantity": 0.16,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.03,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.008,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Coriander Leaves",
+          "quantity": 0.15,
+          "unit": "bunch"
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "name": "Chilli Chicken Momo (10 pcs)",
+      "category": "Dimsum",
+      "price_paisa": 39500,
+      "description": "Fried chicken momo tossed wok-hot with capsicum, onion and a sticky chilli glaze.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "chilli-chicken-momo-10-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Dumpling Wrapper",
+          "quantity": 10,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Chicken Thigh",
+          "quantity": 0.17,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Chilli Sauce",
+          "quantity": 0.04,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Green Chilli",
+          "quantity": 0.015,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "name": "Prawn Har Gow (6 pcs)",
+      "category": "Dimsum",
+      "price_paisa": 48000,
+      "description": "Six crystal-skinned dumplings, each holding a whole snapping prawn.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 16,
+      "image_path": "",
+      "image_slug": "prawn-har-gow-6-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Dumpling Wrapper",
+          "quantity": 6,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Prawns",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Corn Flour",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sesame Oil",
+          "quantity": 0.005,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Spring Onion",
+          "quantity": 0.1,
+          "unit": "bunch"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "name": "Pork Siu Mai (6 pcs)",
+      "category": "Dimsum",
+      "price_paisa": 44000,
+      "description": "Open-topped pork and mushroom dumplings steamed in bamboo.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 16,
+      "image_path": "",
+      "image_slug": "pork-siu-mai-6-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Dumpling Wrapper",
+          "quantity": 6,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Pork Belly",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Mushroom",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Soy Sauce",
+          "quantity": 0.01,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sesame Oil",
+          "quantity": 0.005,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "name": "Crystal Vegetable Dumpling (6 pcs)",
+      "category": "Dimsum",
+      "price_paisa": 38000,
+      "description": "Delicate see-through parcels of cabbage, carrot and mushroom.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 15,
+      "image_path": "",
+      "image_slug": "crystal-vegetable-dumpling-6-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Dumpling Wrapper",
+          "quantity": 6,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Cabbage",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Carrot",
+          "quantity": 0.04,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Mushroom",
+          "quantity": 0.04,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Corn Flour",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sesame Oil",
+          "quantity": 0.005,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "name": "Truffle Mushroom Dumpling (6 pcs)",
+      "category": "Dimsum",
+      "price_paisa": 52000,
+      "description": "Wild mushroom dumplings perfumed with truffle oil and scattered with spring onion.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 17,
+      "image_path": "",
+      "image_slug": "truffle-mushroom-dumpling-6-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Dumpling Wrapper",
+          "quantity": 6,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Mushroom",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Truffle Oil",
+          "quantity": 0.005,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Spring Onion",
+          "quantity": 0.08,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Corn Flour",
+          "quantity": 0.015,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 46,
+      "name": "Tandoori Chicken (Half)",
+      "category": "From the Tandoor",
+      "price_paisa": 72000,
+      "description": "Half a chicken marinated overnight in yoghurt and spice, blistered in the clay oven.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 28,
+      "image_path": "",
+      "image_slug": "tandoori-chicken-half",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Whole Chicken",
+          "quantity": 0.5,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yoghurt",
+          "quantity": 0.1,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tandoori Masala",
+          "quantity": 0.012,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Ginger",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Lemon",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 47,
+      "name": "Chicken Malai Tikka",
+      "category": "From the Tandoor",
+      "price_paisa": 68000,
+      "description": "Mild, creamy chicken tikka with cheese and cardamom, grilled until just golden.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 22,
+      "image_path": "",
+      "image_slug": "chicken-malai-tikka",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Chicken Breast",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.06,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Cheddar Cheese",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cardamom",
+          "quantity": 0.002,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Ginger",
+          "quantity": 0.008,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "name": "Chicken Seekh Kebab",
+      "category": "From the Tandoor",
+      "price_paisa": 65000,
+      "description": "Minced chicken threaded onto skewers with green chilli and fresh coriander.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 22,
+      "image_path": "",
+      "image_slug": "chicken-seekh-kebab",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Chicken Thigh",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Green Chilli",
+          "quantity": 0.012,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garam Masala",
+          "quantity": 0.005,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Coriander Leaves",
+          "quantity": 0.15,
+          "unit": "bunch"
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "name": "Paneer Tikka",
+      "category": "From the Tandoor",
+      "price_paisa": 62000,
+      "description": "Thick cubes of paneer, capsicum and onion charred at the mouth of the tandoor.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 20,
+      "image_path": "",
+      "image_slug": "paneer-tikka",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Paneer",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yoghurt",
+          "quantity": 0.07,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tandoori Masala",
+          "quantity": 0.008,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "name": "Tandoori Prawns",
+      "category": "From the Tandoor",
+      "price_paisa": 128000,
+      "description": "Jumbo prawns in a tangy tandoori marinade, smoky outside and sweet within.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 22,
+      "image_path": "",
+      "image_slug": "tandoori-prawns",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Prawns",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yoghurt",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tandoori Masala",
+          "quantity": 0.008,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Lemon",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.008,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "name": "Mutton Sheekh Kebab",
+      "category": "From the Tandoor",
+      "price_paisa": 89000,
+      "description": "Hand-minced mutton skewers, generously spiced and grilled over live coals.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 26,
+      "image_path": "",
+      "image_slug": "mutton-sheekh-kebab",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Mutton",
+          "quantity": 0.24,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Green Chilli",
+          "quantity": 0.012,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garam Masala",
+          "quantity": 0.006,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Coriander Leaves",
+          "quantity": 0.15,
+          "unit": "bunch"
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "name": "Tandoori Mushroom",
+      "category": "From the Tandoor",
+      "price_paisa": 58000,
+      "description": "Whole button mushrooms marinated in spiced yoghurt and roasted until juicy.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "tandoori-mushroom",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Mushroom",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yoghurt",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tandoori Masala",
+          "quantity": 0.007,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.04,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "name": "Fish Tikka",
+      "category": "From the Tandoor",
+      "price_paisa": 95000,
+      "description": "Firm bhetki fillets in a lemon and carom marinade, straight from the tandoor.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 22,
+      "image_path": "",
+      "image_slug": "fish-tikka",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Bhetki Fish Fillet",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yoghurt",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tandoori Masala",
+          "quantity": 0.008,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Lemon",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Ginger",
+          "quantity": 0.008,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 54,
+      "name": "Tandoori Mixed Grill Platter",
+      "category": "From the Tandoor",
+      "price_paisa": 165000,
+      "description": "Chicken, mutton, prawn and paneer on one sizzling platter built for the table.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 32,
+      "image_path": "",
+      "image_slug": "tandoori-mixed-grill-platter",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Chicken Breast",
+          "quantity": 0.15,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Mutton",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Prawns",
+          "quantity": 0.1,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Paneer",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yoghurt",
+          "quantity": 0.1,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Tandoori Masala",
+          "quantity": 0.015,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.08,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "name": "Chicken Chowmein",
+      "category": "From the Wok",
+      "price_paisa": 42000,
+      "description": "Kathmandu's favourite street noodle, wok-tossed hard and fast with chicken and cabbage.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 16,
+      "image_path": "",
+      "image_slug": "chicken-chowmein",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Egg Noodles",
+          "quantity": 0.18,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Chicken Thigh",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cabbage",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Carrot",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Soy Sauce",
+          "quantity": 0.02,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.03,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Spring Onion",
+          "quantity": 0.1,
+          "unit": "bunch"
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "name": "Veg Hakka Noodles",
+      "category": "From the Wok",
+      "price_paisa": 36000,
+      "description": "Springy noodles with shredded cabbage, carrot and capsicum in a light soy glaze.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 15,
+      "image_path": "",
+      "image_slug": "veg-hakka-noodles",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Egg Noodles",
+          "quantity": 0.18,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cabbage",
+          "quantity": 0.09,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Carrot",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Soy Sauce",
+          "quantity": 0.02,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.03,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "name": "Chilli Chicken (Dry)",
+      "category": "From the Wok",
+      "price_paisa": 55000,
+      "description": "Crisp-fried chicken tossed dry with onion, capsicum and a properly hot chilli sauce.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "chilli-chicken-dry",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Chicken Breast",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Corn Flour",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Chilli Sauce",
+          "quantity": 0.04,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Green Chilli",
+          "quantity": 0.015,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.05,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "name": "Kung Pao Chicken",
+      "category": "From the Wok",
+      "price_paisa": 62000,
+      "description": "Diced chicken with roasted peanuts and dried red chillies in a glossy Szechuan sauce.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "kung-pao-chicken",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Chicken Thigh",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Peanuts",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Dried Red Chilli",
+          "quantity": 0.006,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Szechuan Sauce",
+          "quantity": 0.04,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Spring Onion",
+          "quantity": 0.1,
+          "unit": "bunch"
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "name": "Szechuan Prawns",
+      "category": "From the Wok",
+      "price_paisa": 98000,
+      "description": "Prawns flashed in a searing wok with garlic and a punchy Szechuan glaze.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "szechuan-prawns",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Prawns",
+          "quantity": 0.18,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Szechuan Sauce",
+          "quantity": 0.05,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.012,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Corn Flour",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.04,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "name": "Chilli Paneer",
+      "category": "From the Wok",
+      "price_paisa": 52000,
+      "description": "Golden paneer batons tossed with peppers in a sticky, chilli-hot sauce.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": true,
+      "prep_minutes": 16,
+      "image_path": "",
+      "image_slug": "chilli-paneer",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Paneer",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Corn Flour",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Chilli Sauce",
+          "quantity": 0.04,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.04,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "name": "Thai Green Curry with Chicken",
+      "category": "From the Wok",
+      "price_paisa": 75000,
+      "description": "Coconut green curry simmered with chicken, sweet basil and peppers.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 22,
+      "image_path": "",
+      "image_slug": "thai-green-curry-with-chicken",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Chicken Thigh",
+          "quantity": 0.18,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Coconut Milk",
+          "quantity": 0.2,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Thai Green Curry Paste",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Fish Sauce",
+          "quantity": 0.01,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Basil Leaves",
+          "quantity": 0.06,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Capsicum",
+          "quantity": 0.05,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 62,
+      "name": "Wok-Tossed Pork Belly",
+      "category": "From the Wok",
+      "price_paisa": 88000,
+      "description": "Twice-cooked pork belly, crisp at the edges, glazed in oyster sauce and chilli.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 22,
+      "image_path": "",
+      "image_slug": "wok-tossed-pork-belly",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Pork Belly",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Oyster Sauce",
+          "quantity": 0.03,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Soy Sauce",
+          "quantity": 0.02,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Green Chilli",
+          "quantity": 0.012,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Spring Onion",
+          "quantity": 0.12,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.01,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "name": "Basil Chicken with Chilli",
+      "category": "From the Wok",
+      "price_paisa": 68000,
+      "description": "Thai-style minced chicken with holy basil, bird's eye chilli and garlic.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "basil-chicken-with-chilli",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Chicken Breast",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Basil Leaves",
+          "quantity": 0.08,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Green Chilli",
+          "quantity": 0.015,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Oyster Sauce",
+          "quantity": 0.025,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.012,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.03,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "name": "Butter Naan",
+      "category": "Bread & Rice",
+      "price_paisa": 12000,
+      "description": "Pillowy tandoor naan brushed with melting butter as it comes off the wall.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 8,
+      "image_path": "",
+      "image_slug": "butter-naan",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.015,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Milk",
+          "quantity": 0.03,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Yeast",
+          "quantity": 0.002,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "name": "Garlic Naan",
+      "category": "Bread & Rice",
+      "price_paisa": 15000,
+      "description": "Naan studded with roasted garlic and a scatter of fresh coriander.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 8,
+      "image_path": "",
+      "image_slug": "garlic-naan",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.015,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garlic",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Coriander Leaves",
+          "quantity": 0.1,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Yeast",
+          "quantity": 0.002,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "name": "Tandoori Roti",
+      "category": "Bread & Rice",
+      "price_paisa": 8000,
+      "description": "Simple wholewheat roti, slapped onto the clay oven and served blistered and hot.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 7,
+      "image_path": "",
+      "image_slug": "tandoori-roti",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.11,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Salt",
+          "quantity": 0.002,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "name": "Laccha Paratha",
+      "category": "Bread & Rice",
+      "price_paisa": 16000,
+      "description": "A many-layered paratha that pulls apart into buttery ribbons.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 10,
+      "image_path": "",
+      "image_slug": "laccha-paratha",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.13,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.025,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Salt",
+          "quantity": 0.002,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 68,
+      "name": "Steamed Basmati Rice",
+      "category": "Bread & Rice",
+      "price_paisa": 18000,
+      "description": "Long-grain basmati steamed loose and fragrant, grain by separate grain.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 12,
+      "image_path": "",
+      "image_slug": "steamed-basmati-rice",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Basmati Rice",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Salt",
+          "quantity": 0.002,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "name": "Jeera Rice",
+      "category": "Bread & Rice",
+      "price_paisa": 24000,
+      "description": "Basmati tempered with cumin bloomed in butter until nutty and aromatic.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 14,
+      "image_path": "",
+      "image_slug": "jeera-rice",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Basmati Rice",
+          "quantity": 0.2,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cumin Powder",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.02,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 70,
+      "name": "Chicken Biryani",
+      "category": "Bread & Rice",
+      "price_paisa": 52000,
+      "description": "Saffron-laced basmati layered over marinated chicken and sealed for the dum.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": true,
+      "prep_minutes": 25,
+      "image_path": "",
+      "image_slug": "chicken-biryani",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Basmati Rice",
+          "quantity": 0.25,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Chicken Thigh",
+          "quantity": 0.18,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Yoghurt",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Onion",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Garam Masala",
+          "quantity": 0.006,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Saffron",
+          "quantity": 0.2,
+          "unit": "g"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.03,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "name": "Vegetable Pulao",
+      "category": "Bread & Rice",
+      "price_paisa": 34000,
+      "description": "Gently spiced rice with garden vegetables and toasted cashews.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 20,
+      "image_path": "",
+      "image_slug": "vegetable-pulao",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Basmati Rice",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Carrot",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sweet Corn",
+          "quantity": 0.04,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cashew Nuts",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cumin Powder",
+          "quantity": 0.003,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "name": "Egg Fried Rice",
+      "category": "Bread & Rice",
+      "price_paisa": 32000,
+      "description": "Wok-charred rice threaded with ribbons of egg and plenty of spring onion.",
+      "is_available": true,
+      "is_vegetarian": false,
+      "is_spicy": false,
+      "prep_minutes": 15,
+      "image_path": "",
+      "image_slug": "egg-fried-rice",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Basmati Rice",
+          "quantity": 0.22,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Eggs",
+          "quantity": 2,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Spring Onion",
+          "quantity": 0.1,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Soy Sauce",
+          "quantity": 0.015,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.025,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Carrot",
+          "quantity": 0.04,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "name": "Molten Chocolate Lava Cake",
+      "category": "Dessert",
+      "price_paisa": 42000,
+      "description": "Dark chocolate pudding that spills its warm centre the moment you break it.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 18,
+      "image_path": "",
+      "image_slug": "molten-chocolate-lava-cake",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Dark Chocolate",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Eggs",
+          "quantity": 2,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Sugar",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Vanilla Ice Cream",
+          "quantity": 0.06,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "name": "New York Cheesecake",
+      "category": "Dessert",
+      "price_paisa": 48000,
+      "description": "Dense, tangy baked cheesecake on a buttery biscuit base.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 10,
+      "image_path": "",
+      "image_slug": "new-york-cheesecake",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Cream Cheese",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Digestive Biscuit",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sugar",
+          "quantity": 0.04,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Eggs",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.05,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 75,
+      "name": "Tiramisu",
+      "category": "Dessert",
+      "price_paisa": 52000,
+      "description": "Espresso-soaked ladyfingers under clouds of mascarpone and a dusting of cocoa.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 12,
+      "image_path": "",
+      "image_slug": "tiramisu",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Mascarpone Cheese",
+          "quantity": 0.1,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Ladyfinger Biscuit",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Coffee Beans",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cocoa Powder",
+          "quantity": 0.01,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sugar",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.06,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 76,
+      "name": "Gulab Jamun (2 pcs)",
+      "category": "Dessert",
+      "price_paisa": 22000,
+      "description": "Two warm milk dumplings soaked through with cardamom syrup.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 10,
+      "image_path": "",
+      "image_slug": "gulab-jamun-2-pcs",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Gulab Jamun Mix",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sugar",
+          "quantity": 0.08,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Milk",
+          "quantity": 0.04,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Cardamom",
+          "quantity": 0.001,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sunflower Oil",
+          "quantity": 0.04,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "name": "Sikarni",
+      "category": "Dessert",
+      "price_paisa": 28000,
+      "description": "The Newari classic: hung curd whipped with cardamom, saffron and pistachio.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 10,
+      "image_path": "",
+      "image_slug": "sikarni",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Yoghurt",
+          "quantity": 0.18,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sugar",
+          "quantity": 0.04,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cardamom",
+          "quantity": 0.001,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Pistachio",
+          "quantity": 0.015,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Saffron",
+          "quantity": 0.1,
+          "unit": "g"
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "name": "Vanilla Bean Panna Cotta",
+      "category": "Dessert",
+      "price_paisa": 45000,
+      "description": "A barely-set cream custard flecked with vanilla and topped with fresh strawberry.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 12,
+      "image_path": "",
+      "image_slug": "vanilla-bean-panna-cotta",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.15,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Milk",
+          "quantity": 0.06,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sugar",
+          "quantity": 0.035,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Gelatin",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Vanilla Extract",
+          "quantity": 0.005,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Strawberry",
+          "quantity": 0.04,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 79,
+      "name": "Apple Crumble with Ice Cream",
+      "category": "Dessert",
+      "price_paisa": 46000,
+      "description": "Cinnamon-spiced apples under a buttery crumble, with vanilla ice cream melting in.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 20,
+      "image_path": "",
+      "image_slug": "apple-crumble-with-ice-cream",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Green Apple",
+          "quantity": 2,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "All-Purpose Flour",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Brown Sugar",
+          "quantity": 0.05,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cinnamon",
+          "quantity": 0.002,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Vanilla Ice Cream",
+          "quantity": 0.07,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 80,
+      "name": "Juju Dhau Brulee",
+      "category": "Dessert",
+      "price_paisa": 38000,
+      "description": "Bhaktapur's king curd under a torched sugar crust that cracks with the spoon.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 12,
+      "image_path": "",
+      "image_slug": "juju-dhau-brulee",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Juju Dhau",
+          "quantity": 0.15,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Brown Sugar",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Fresh Cream",
+          "quantity": 0.05,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Vanilla Extract",
+          "quantity": 0.004,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 81,
+      "name": "Triple Chocolate Brownie Sundae",
+      "category": "Dessert",
+      "price_paisa": 44000,
+      "description": "A fudgy brownie, vanilla ice cream, toasted almonds and a hot chocolate pour.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 12,
+      "image_path": "",
+      "image_slug": "triple-chocolate-brownie-sundae",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Dark Chocolate",
+          "quantity": 0.07,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cocoa Powder",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Butter",
+          "quantity": 0.045,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Eggs",
+          "quantity": 2,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Sugar",
+          "quantity": 0.06,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Vanilla Ice Cream",
+          "quantity": 0.08,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Almonds",
+          "quantity": 0.02,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 82,
+      "name": "Nepali Milk Tea",
+      "category": "Drinks",
+      "price_paisa": 12000,
+      "description": "Strong tea boiled down with full-cream milk, the way the whole city drinks it.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 6,
+      "image_path": "",
+      "image_slug": "nepali-milk-tea",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Black Tea Leaves",
+          "quantity": 0.008,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Milk",
+          "quantity": 0.15,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sugar",
+          "quantity": 0.015,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 83,
+      "name": "Masala Chiya",
+      "category": "Drinks",
+      "price_paisa": 15000,
+      "description": "Milk tea simmered with cardamom, ginger and cinnamon until deeply fragrant.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 7,
+      "image_path": "",
+      "image_slug": "masala-chiya",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Black Tea Leaves",
+          "quantity": 0.008,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Milk",
+          "quantity": 0.15,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sugar",
+          "quantity": 0.015,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cardamom",
+          "quantity": 0.001,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Ginger",
+          "quantity": 0.004,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Cinnamon",
+          "quantity": 0.001,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 84,
+      "name": "Espresso",
+      "category": "Drinks",
+      "price_paisa": 18000,
+      "description": "A short, thick double shot pulled from freshly roasted Nepali highland beans.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 4,
+      "image_path": "",
+      "image_slug": "espresso",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Coffee Beans",
+          "quantity": 0.018,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 85,
+      "name": "Cappuccino",
+      "category": "Drinks",
+      "price_paisa": 25000,
+      "description": "Espresso under a deep cap of velvet microfoam and a dusting of cocoa.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 6,
+      "image_path": "",
+      "image_slug": "cappuccino",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Coffee Beans",
+          "quantity": 0.018,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Milk",
+          "quantity": 0.14,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Cocoa Powder",
+          "quantity": 0.002,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 86,
+      "name": "Cold Brew Coffee",
+      "category": "Drinks",
+      "price_paisa": 32000,
+      "description": "Steeped for eighteen hours, poured over ice: smooth, sweet and never bitter.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 5,
+      "image_path": "",
+      "image_slug": "cold-brew-coffee",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Coffee Beans",
+          "quantity": 0.03,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Milk",
+          "quantity": 0.06,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sugar Syrup",
+          "quantity": 0.02,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 87,
+      "name": "Fresh Lime Soda",
+      "category": "Drinks",
+      "price_paisa": 22000,
+      "description": "Hand-squeezed lime, chilled soda and your choice of sweet or salted.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 4,
+      "image_path": "",
+      "image_slug": "fresh-lime-soda",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Lime",
+          "quantity": 2,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Soda Water",
+          "quantity": 0.25,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sugar Syrup",
+          "quantity": 0.025,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Salt",
+          "quantity": 0.001,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 88,
+      "name": "Seasonal Fruit Juice",
+      "category": "Drinks",
+      "price_paisa": 28000,
+      "description": "Whatever is ripest in Kalimati that morning, pressed to order.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 6,
+      "image_path": "",
+      "image_slug": "seasonal-fruit-juice",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Seasonal Fruit Mix",
+          "quantity": 0.25,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Sugar Syrup",
+          "quantity": 0.02,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Lemon",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 89,
+      "name": "Iced Lemon Tea",
+      "category": "Drinks",
+      "price_paisa": 24000,
+      "description": "Cold-steeped black tea sharpened with lemon and poured over crushed ice.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 5,
+      "image_path": "",
+      "image_slug": "iced-lemon-tea",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Black Tea Leaves",
+          "quantity": 0.006,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Lemon",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Sugar Syrup",
+          "quantity": 0.03,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 90,
+      "name": "Bottled Mineral Water (1 L)",
+      "category": "Drinks",
+      "price_paisa": 8000,
+      "description": "Sealed one-litre Himalayan mineral water, served chilled.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 2,
+      "image_path": "",
+      "image_slug": "bottled-mineral-water-1-l",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Mineral Water 1L Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 91,
+      "name": "Gorkha Premium (650 ml)",
+      "category": "Beer",
+      "price_paisa": 52000,
+      "description": "Nepal's crisp, dependable lager, poured ice cold.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "gorkha-premium-650-ml",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Gorkha Premium 650ml Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 92,
+      "name": "Everest Lager (650 ml)",
+      "category": "Beer",
+      "price_paisa": 50000,
+      "description": "A clean, easy-drinking pale lager with a dry finish.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "everest-lager-650-ml",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Everest Lager 650ml Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 93,
+      "name": "Nepal Ice Strong (650 ml)",
+      "category": "Beer",
+      "price_paisa": 48000,
+      "description": "Full-bodied strong lager with a warming malt backbone.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "nepal-ice-strong-650-ml",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Nepal Ice Strong 650ml Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 94,
+      "name": "Barahsinghe Lager (330 ml)",
+      "category": "Beer",
+      "price_paisa": 45000,
+      "description": "Craft lager brewed in the valley, bright and lightly floral.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "barahsinghe-lager-330-ml",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Barahsinghe Lager 330ml Can",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 95,
+      "name": "Barahsinghe Hazy IPA (330 ml)",
+      "category": "Beer",
+      "price_paisa": 58000,
+      "description": "Cloudy, tropical and generously hopped Nepali craft IPA.",
+      "is_available": false,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "barahsinghe-hazy-ipa-330-ml",
+      "image": "",
+      "available": false,
+      "recipe": [
+        {
+          "ingredient_name": "Barahsinghe Hazy IPA 330ml Can",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 96,
+      "name": "Tuborg Draught Pint",
+      "category": "Beer",
+      "price_paisa": 55000,
+      "description": "A proper cold pint pulled fresh from the tap.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "tuborg-draught-pint",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Tuborg Draught Keg",
+          "quantity": 0.5,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 97,
+      "name": "Carlsberg Green (330 ml)",
+      "category": "Beer",
+      "price_paisa": 60000,
+      "description": "The Danish pilsner classic, crisp and faintly herbal.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "carlsberg-green-330-ml",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Carlsberg Green 330ml Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 98,
+      "name": "Corona Extra (355 ml)",
+      "category": "Beer",
+      "price_paisa": 85000,
+      "description": "Mexican pale lager served with the customary wedge of lime.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "corona-extra-355-ml",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Corona Extra 355ml Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Lime",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 99,
+      "name": "Hoegaarden White (330 ml)",
+      "category": "Beer",
+      "price_paisa": 89000,
+      "description": "Belgian wheat beer with coriander and orange peel, served with a slice.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "hoegaarden-white-330-ml",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Hoegaarden 330ml Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Orange",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 100,
+      "name": "House Red - Glass (175 ml)",
+      "category": "Wine",
+      "price_paisa": 75000,
+      "description": "Our everyday red: soft, plummy and poured generously.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "house-red-glass-175-ml",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "House Red Wine",
+          "quantity": 0.175,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 101,
+      "name": "House White - Glass (175 ml)",
+      "category": "Wine",
+      "price_paisa": 75000,
+      "description": "Chilled, dry and citrus-fresh - the easiest glass on the list.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "house-white-glass-175-ml",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "House White Wine",
+          "quantity": 0.175,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "name": "Jacob's Creek Shiraz Cabernet - Bottle",
+      "category": "Wine",
+      "price_paisa": 420000,
+      "description": "Australian blend of ripe plum and blackcurrant with a smooth, spicy finish.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 4,
+      "image_path": "",
+      "image_slug": "jacob-s-creek-shiraz-cabernet-bottle",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Jacob's Creek Shiraz Cabernet Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "name": "Jacob's Creek Chardonnay - Bottle",
+      "category": "Wine",
+      "price_paisa": 410000,
+      "description": "Peach and melon over a light touch of oak; excellent with the salmon.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 4,
+      "image_path": "",
+      "image_slug": "jacob-s-creek-chardonnay-bottle",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Jacob's Creek Chardonnay Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 104,
+      "name": "Casillero del Diablo Merlot - Bottle",
+      "category": "Wine",
+      "price_paisa": 560000,
+      "description": "Chilean merlot with velvet tannins, dark cherry and a hint of mocha.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 4,
+      "image_path": "",
+      "image_slug": "casillero-del-diablo-merlot-bottle",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Casillero del Diablo Merlot Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "name": "Oyster Bay Sauvignon Blanc - Bottle",
+      "category": "Wine",
+      "price_paisa": 720000,
+      "description": "Marlborough sauvignon blanc, razor sharp with passionfruit and cut grass.",
+      "is_available": false,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 4,
+      "image_path": "",
+      "image_slug": "oyster-bay-sauvignon-blanc-bottle",
+      "image": "",
+      "available": false,
+      "recipe": [
+        {
+          "ingredient_name": "Oyster Bay Sauvignon Blanc Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 106,
+      "name": "19 Crimes Red Blend - Bottle",
+      "category": "Wine",
+      "price_paisa": 680000,
+      "description": "Bold, jammy and unapologetic - a red for the yak sizzler.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 4,
+      "image_path": "",
+      "image_slug": "19-crimes-red-blend-bottle",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "19 Crimes Red Blend Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 107,
+      "name": "Villa Antinori Chianti Classico - Bottle",
+      "category": "Wine",
+      "price_paisa": 890000,
+      "description": "Tuscan sangiovese with sour cherry, leather and a long savoury finish.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 4,
+      "image_path": "",
+      "image_slug": "villa-antinori-chianti-classico-bottle",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Villa Antinori Chianti Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 108,
+      "name": "Prosecco Brut - Bottle",
+      "category": "Wine",
+      "price_paisa": 780000,
+      "description": "Fine, persistent bubbles with green apple and white blossom.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 4,
+      "image_path": "",
+      "image_slug": "prosecco-brut-bottle",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Prosecco Brut Bottle",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 109,
+      "name": "Virgin Mojito",
+      "category": "Mocktails",
+      "price_paisa": 38000,
+      "description": "Lime and mint muddled hard, lengthened with soda over crushed ice.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 6,
+      "image_path": "",
+      "image_slug": "virgin-mojito",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Lime",
+          "quantity": 2,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Mint Leaves",
+          "quantity": 0.3,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Sugar Syrup",
+          "quantity": 0.025,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Soda Water",
+          "quantity": 0.2,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 110,
+      "name": "Blue Lagoon Cooler",
+      "category": "Mocktails",
+      "price_paisa": 42000,
+      "description": "Electric blue curacao and lemon-lime, as refreshing as it looks.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 5,
+      "image_path": "",
+      "image_slug": "blue-lagoon-cooler",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Blue Curacao Syrup",
+          "quantity": 0.03,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sprite",
+          "quantity": 0.2,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Lemon",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 111,
+      "name": "Passion Fruit Fizz",
+      "category": "Mocktails",
+      "price_paisa": 45000,
+      "description": "Tart passion fruit lifted with soda and a slap of fresh mint.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 6,
+      "image_path": "",
+      "image_slug": "passion-fruit-fizz",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Passion Fruit Syrup",
+          "quantity": 0.035,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Soda Water",
+          "quantity": 0.18,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Lime",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Mint Leaves",
+          "quantity": 0.1,
+          "unit": "bunch"
+        }
+      ]
+    },
+    {
+      "id": 112,
+      "name": "Cucumber Mint Refresher",
+      "category": "Mocktails",
+      "price_paisa": 40000,
+      "description": "Cool cucumber pressed with mint and lime - the antidote to a hot afternoon.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 6,
+      "image_path": "",
+      "image_slug": "cucumber-mint-refresher",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Cucumber",
+          "quantity": 0.12,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Mint Leaves",
+          "quantity": 0.25,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Lime",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Soda Water",
+          "quantity": 0.15,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sugar Syrup",
+          "quantity": 0.02,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 113,
+      "name": "Shirley Temple",
+      "category": "Mocktails",
+      "price_paisa": 38000,
+      "description": "Sweet grenadine sinking through lemon-lime with an orange twist.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 5,
+      "image_path": "",
+      "image_slug": "shirley-temple",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Grenadine Syrup",
+          "quantity": 0.03,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sprite",
+          "quantity": 0.22,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Orange",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 114,
+      "name": "Himalayan Berry Smash",
+      "category": "Mocktails",
+      "price_paisa": 48000,
+      "description": "Mixed mountain berries smashed with lime, mint and soda.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 7,
+      "image_path": "",
+      "image_slug": "himalayan-berry-smash",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Mixed Berry Puree",
+          "quantity": 0.06,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Soda Water",
+          "quantity": 0.15,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Lime",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Sugar Syrup",
+          "quantity": 0.02,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Mint Leaves",
+          "quantity": 0.1,
+          "unit": "bunch"
+        }
+      ]
+    },
+    {
+      "id": 115,
+      "name": "Green Apple Sour",
+      "category": "Mocktails",
+      "price_paisa": 44000,
+      "description": "Crisp green apple with a proper sour edge and a fresh apple fan.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 6,
+      "image_path": "",
+      "image_slug": "green-apple-sour",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Green Apple Syrup",
+          "quantity": 0.03,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Green Apple",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Lemon",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Soda Water",
+          "quantity": 0.15,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 116,
+      "name": "Watermelon Basil Crush",
+      "category": "Mocktails",
+      "price_paisa": 46000,
+      "description": "Fresh watermelon crushed with basil and lime - summer in a glass.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 7,
+      "image_path": "",
+      "image_slug": "watermelon-basil-crush",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Watermelon",
+          "quantity": 0.25,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Basil Leaves",
+          "quantity": 0.06,
+          "unit": "bunch"
+        },
+        {
+          "ingredient_name": "Lime",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Sugar Syrup",
+          "quantity": 0.02,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 117,
+      "name": "Ginger Honey Lemonade",
+      "category": "Mocktails",
+      "price_paisa": 42000,
+      "description": "Warming ginger and wild honey shaken through sharp lemonade.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 6,
+      "image_path": "",
+      "image_slug": "ginger-honey-lemonade",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Ginger",
+          "quantity": 0.02,
+          "unit": "kg"
+        },
+        {
+          "ingredient_name": "Honey",
+          "quantity": 0.03,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Lemon",
+          "quantity": 2,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Soda Water",
+          "quantity": 0.18,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 118,
+      "name": "Tequila Gold Shot",
+      "category": "Shots",
+      "price_paisa": 45000,
+      "description": "Gold tequila with the traditional salt and lime service.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 2,
+      "image_path": "",
+      "image_slug": "tequila-gold-shot",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Tequila Gold",
+          "quantity": 0.03,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Lime",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient_name": "Salt",
+          "quantity": 0.001,
+          "unit": "kg"
+        }
+      ]
+    },
+    {
+      "id": 119,
+      "name": "Jagermeister Shot",
+      "category": "Shots",
+      "price_paisa": 55000,
+      "description": "Ice-cold herbal liqueur, served straight from the deep freeze.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 2,
+      "image_path": "",
+      "image_slug": "jagermeister-shot",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Jagermeister",
+          "quantity": 0.03,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 120,
+      "name": "Vodka Shot",
+      "category": "Shots",
+      "price_paisa": 35000,
+      "description": "Clean, neutral and freezing - the workhorse of the bar.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 2,
+      "image_path": "",
+      "image_slug": "vodka-shot",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Vodka",
+          "quantity": 0.03,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 121,
+      "name": "Baby Guinness",
+      "category": "Shots",
+      "price_paisa": 48000,
+      "description": "Coffee liqueur topped with a floated cream head that mimics a tiny stout.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "baby-guinness",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Kahlua Coffee Liqueur",
+          "quantity": 0.025,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Baileys Irish Cream",
+          "quantity": 0.01,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 122,
+      "name": "B-52 Layered Shot",
+      "category": "Shots",
+      "price_paisa": 65000,
+      "description": "Three neat layers of coffee liqueur, Irish cream and orange cognac.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 4,
+      "image_path": "",
+      "image_slug": "b-52-layered-shot",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Kahlua Coffee Liqueur",
+          "quantity": 0.015,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Baileys Irish Cream",
+          "quantity": 0.015,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Grand Marnier",
+          "quantity": 0.015,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 123,
+      "name": "Kamikaze Shot",
+      "category": "Shots",
+      "price_paisa": 52000,
+      "description": "Vodka, triple sec and lime shaken hard and strained ice cold.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 3,
+      "image_path": "",
+      "image_slug": "kamikaze-shot",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Vodka",
+          "quantity": 0.02,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Triple Sec",
+          "quantity": 0.015,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Lime",
+          "quantity": 1,
+          "unit": "pcs"
+        }
+      ]
+    },
+    {
+      "id": 124,
+      "name": "Local Raksi Shot",
+      "category": "Shots",
+      "price_paisa": 30000,
+      "description": "Traditional millet raksi from the hills, served warm or chilled.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 2,
+      "image_path": "",
+      "image_slug": "local-raksi-shot",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Local Raksi",
+          "quantity": 0.03,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 125,
+      "name": "Fireball Cinnamon Shot",
+      "category": "Shots",
+      "price_paisa": 58000,
+      "description": "Cinnamon whisky that goes down sweet and finishes hot.",
+      "is_available": true,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 2,
+      "image_path": "",
+      "image_slug": "fireball-cinnamon-shot",
+      "image": "",
+      "available": true,
+      "recipe": [
+        {
+          "ingredient_name": "Fireball Cinnamon Whisky",
+          "quantity": 0.03,
+          "unit": "l"
+        }
+      ]
+    },
+    {
+      "id": 126,
+      "name": "Absinthe Shot",
+      "category": "Shots",
+      "price_paisa": 78000,
+      "description": "High-proof anise spirit with the classic burnt sugar ritual.",
+      "is_available": false,
+      "is_vegetarian": true,
+      "is_spicy": false,
+      "prep_minutes": 4,
+      "image_path": "",
+      "image_slug": "absinthe-shot",
+      "image": "",
+      "available": false,
+      "recipe": [
+        {
+          "ingredient_name": "Absinthe",
+          "quantity": 0.025,
+          "unit": "l"
+        },
+        {
+          "ingredient_name": "Sugar",
+          "quantity": 0.005,
+          "unit": "kg"
+        }
+      ]
+    }
+  ]
+}

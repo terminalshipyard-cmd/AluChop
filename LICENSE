@@ -1,0 +1,81 @@
+AluChop Restaurant Management System
+Academic Use License
+
+© 2026 AluChop Restaurant Management System. Developed by Shashank Bhattarai
+(ACE082BCT078). For academic use as an ENCT151 Object-Oriented Programming
+coursework project. All rights reserved.
+
+--------------------------------------------------------------------------
+1. Purpose
+--------------------------------------------------------------------------
+
+This software and its accompanying documentation (together, "the Work") were
+created solely as a coursework submission for ENCT151 Object-Oriented
+Programming. The Work is an academic exercise. It is not a commercial product
+and carries no commercial support.
+
+--------------------------------------------------------------------------
+2. Grant of Permission
+--------------------------------------------------------------------------
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of the Work, to use, copy, study, compile, run and modify the Work for
+NON-COMMERCIAL ACADEMIC PURPOSES ONLY — namely private study, teaching,
+academic evaluation, and research — subject to every condition in Section 3.
+
+--------------------------------------------------------------------------
+3. Conditions
+--------------------------------------------------------------------------
+
+a) ATTRIBUTION. The above copyright notice, this permission notice and the
+   author attribution (Shashank Bhattarai, ACE082BCT078,
+   shashankbhattarai006@gmail.com) must be retained in all copies or
+   substantial portions of the Work, including the in-application credit
+   displayed by the program.
+
+b) NO COMMERCIAL USE. The Work, in whole or in part, and any derivative of
+   it, may not be sold, licensed, sublicensed, rented, or otherwise used for
+   commercial advantage or monetary compensation without the prior written
+   permission of the copyright holder.
+
+c) NO ACADEMIC MISREPRESENTATION. The Work may not be submitted, in whole or
+   in part, as another person's own coursework, assignment, thesis, or
+   examination material at any institution. Doing so constitutes academic
+   misconduct and is expressly prohibited by this license.
+
+d) DERIVATIVES. Modified versions must be clearly marked as modified, must
+   not be represented as the original Work, and remain bound by this license.
+
+--------------------------------------------------------------------------
+4. Third-Party Components
+--------------------------------------------------------------------------
+
+The Work is built against the Qt 6 framework (Widgets, Sql, Charts, Svg,
+PrintSupport) and SQLite, which are distributed under their own licenses
+(Qt: LGPL v3 / GPL; SQLite: public domain). This license applies only to the
+original source code, assets and documentation authored for this project, and
+grants no rights whatsoever in those third-party components. Their respective
+license terms govern their own use.
+
+--------------------------------------------------------------------------
+5. Disclaimer of Warranty and Limitation of Liability
+--------------------------------------------------------------------------
+
+THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE WORK OR THE USE OR OTHER DEALINGS IN THE
+WORK.
+
+The restaurant, menu, pricing, supplier and staff data shipped with the Work
+are fictitious sample data created for demonstration purposes and do not
+describe any real business, person or product.
+
+--------------------------------------------------------------------------
+
+Designed & Developed by
+Shashank Bhattarai
+ACE082BCT078
+shashankbhattarai006@gmail.com
