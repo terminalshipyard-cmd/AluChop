@@ -282,11 +282,37 @@ int seedBookings(services::AppContext& ctx) {
     int booked = 0;
     int firstId = 0;
 
-    // The tool is run repeatedly against the same database. Booking the same four guests again on
-    // every run would fill the sheet with obvious duplicates, so a guest already on today's sheet
-    // is left alone and their existing booking is what gets photographed.
+    // The same guest cannot be sitting at two tables at once. An earlier run of this tool could
+    // leave exactly that behind, so before anything is booked the sheet is tidied the way a host
+    // would: the duplicate is cancelled through the service, never deleted behind its back.
+    {
+        QStringList seen;
+        for (const auto& booking : ctx.reservations().onDay(today)) {
+            const bool live = booking.status() == models::ReservationStatus::Booked
+                              || booking.status() == models::ReservationStatus::Seated;
+            if (!live) continue;
+            if (!seen.contains(booking.customerName())) {
+                seen << booking.customerName();
+                continue;
+            }
+            const auto dropped = ctx.reservations().cancel(booking.id());
+            say(dropped.isOk()
+                    ? QStringLiteral("INFO  cancelled duplicate booking %1 for %2")
+                          .arg(booking.id())
+                          .arg(booking.customerName())
+                    : QStringLiteral("WARN  could not cancel duplicate booking %1: %2")
+                          .arg(booking.id())
+                          .arg(dropped.error()));
+        }
+    }
+
+    // A guest already on today's sheet is left alone: re-running the tool must photograph the book
+    // as it stands, not stack a second sitting on top of it.
     const auto sheet = ctx.reservations().onDay(today);
-    booked = static_cast<int>(sheet.size());
+    for (const auto& booking : sheet)
+        if (booking.status() == models::ReservationStatus::Booked
+            || booking.status() == models::ReservationStatus::Seated)
+            ++booked;
 
     for (const Guest& g : guests) {
         if (slot.date() != today) break;
@@ -440,10 +466,23 @@ SeededState seedLiveState(services::AppContext& ctx) {
     for (const Lane& lane : lanes) {
         const auto status = static_cast<models::OrderStatus>(
             static_cast<int>(models::OrderStatus::Pending) + lane.advances);
-        // Re-running the tool must not stack a fresh ticket into a lane that already holds one,
-        // or the pass grows by three every run until it overflows its panel.
-        if (!ctx.orders().withStatus(status).empty()) {
+        // Re-running the tool must not stack a fresh ticket into a lane that already holds one, or
+        // the pass grows by three on every run. A lane that is already occupied keeps its ticket;
+        // anything behind it is finished off through advanceStatus(), exactly as the kitchen would
+        // clear a backlog, so the pass shows one live ticket per lane instead of a growing pile.
+        const auto standing = ctx.orders().withStatus(status);
+        if (!standing.empty()) {
             ++s.onThePass;
+            for (std::size_t extra = 1; extra < standing.size(); ++extra) {
+                for (int step = lane.advances; step < 3; ++step) {
+                    const auto adv = ctx.orders().advanceStatus(standing[extra].id());
+                    if (!adv.isOk()) {
+                        say(QStringLiteral("WARN  could not clear backlog ticket %1: %2")
+                                .arg(standing[extra].orderNumber(), adv.error()));
+                        break;
+                    }
+                }
+            }
             continue;
         }
         const int ticket = openOrder(lane.type);

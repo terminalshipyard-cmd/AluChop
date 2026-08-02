@@ -38,8 +38,9 @@ even in transit.
 | **GUI** | Qt 6.11.1 Widgets, Charts, Svg, PrintSupport |
 | **Database** | SQLite via the Qt SQL `QSQLITE` driver — 17 tables |
 | **Build** | CMake ≥ 3.20 + Ninja · builds clean with **0 errors, 0 warnings** under `-Wall -Wextra` |
-| **Size** | 85 headers, 77 sources, ~32,500 lines |
-| **Seeded content** | 126 menu items across 14 categories, 157 ingredients, 580 recipe lines, 6 suppliers, 12 tables, 7 staff, 6 customers, 2 promos |
+| **Size** | 86 headers, 77 sources, ≈36,300 lines under `include/` + `src/` · a ≈5.6 MB single binary |
+| **Verification** | `aluchop_e2e`: **372 hard assertions** against the shipped schema · `aluchop_uishot`: every screen rendered offscreen to PNG |
+| **Seeded content** | 126 menu items across 14 categories (9 dishes each), 157 ingredients, 580 recipe lines, 6 suppliers, 12 tables, 7 staff, 6 customers, 2 promos |
 
 ---
 
@@ -106,10 +107,12 @@ even in transit.
 - Promo codes (`PERCENT` and `FLAT`, with validity window and minimum order) — two ship seeded: `WELCOME10` and `FLAT100`
 - Staff discount (10 %) resolved through the `StaffCustomer` fusion
 - Discounts are **compared, never stacked** — the larger wins, and a tie keeps the promo the guest asked for
-- Configurable service charge, applied **after** the discount
+- Configurable service charge — a percentage **of the subtotal**, added on top after the discount has been taken off (seeded at 10 %, changeable in Settings)
 - **`total = subtotal − discount + serviceCharge`. There is no tax term anywhere.**
+- The receipt still prints a *VAT 13 % (included)* line, because a Nepali VAT invoice has to — but it is a **reverse** computation *out of* the inclusive price, so `Taxable amount + VAT == TOTAL` exactly. The e2e suite asserts both that identity and that the total is *not* the subtotal grossed up by 13 %
 - Cash / Card / Digital Wallet; change calculated for cash and the *Take payment* button stays disabled until the tender covers the total
 - Receipt as text, as a print job (`QPrinter`) or as a PDF (`QPdfWriter`)
+- Every settled bill also **streams itself** — `std::ostringstream out; out << bill;` — into the append-mode text log, so a plain-text copy of every receipt survives outside SQLite. The guest's receipt and the archival copy render the *same* snapshot, so they cannot disagree
 
 ### 📈 Reports
 - Five report kinds: Sales, Inventory, Orders, Customers, Employees
@@ -117,6 +120,7 @@ even in transit.
 - Preview table showing **exactly** the rows the export will contain
 - **CSV export** through the raw `<fstream>` `CsvWriter`, and **PDF export** through `QPdfWriter`
 - **Audit-trail integrity check** — walks the 128-byte binary records and reports the first bad checksum or sequence break
+- **Audit record browser** — type any record number and read that record straight back. Record *N* is fetched from byte *N* × 128 with a single `seekg`; record 0 and record 90,000 cost the same. The panel shows the record's action, entity, sequence, amount, timestamp and its byte offset, next to the sequential "last 15 records" view
 
 ### ⚙️ Settings
 - Restaurant name, address and phone (these appear on receipts and reports)
@@ -147,7 +151,8 @@ even in transit.
 > ./build/aluchop_uishot          # run from the project root: it writes to ./docs/screenshots
 > ```
 >
-> Set `ALUCHOP_SHOT_DIR` to write somewhere else.
+> Set `ALUCHOP_SHOT_DIR` to write somewhere else. Sixteen captures ship: thirteen in the light
+> Sage Green palette and three in dark. Every image below is the running application, not a mock-up.
 
 ### Light theme — Sage Green
 
@@ -164,7 +169,7 @@ even in transit.
 | ![Inventory](docs/screenshots/09-inventory.png) | ![Reservations](docs/screenshots/10-reservations.png) |
 | **Inventory** — stock, suppliers, low-stock alerts | **Reservations** — availability, booking, seating |
 | ![Reports](docs/screenshots/11-reports.png) | ![Settings](docs/screenshots/12-settings.png) |
-| **Reports** — charts plus CSV and PDF export | **Settings** — restaurant info, theme, backup, restore |
+| **Reports** — five reports, chart, CSV/PDF export, audit trail | **Settings** — restaurant info, theme, backup, restore |
 | ![Command palette](docs/screenshots/13-command-palette.png) | |
 | **Command palette** — `Ctrl+K`, search everything | |
 
@@ -265,6 +270,76 @@ launch adds nothing.
 
 ---
 
+## Verification
+
+What is *actually* proven about this build, and the command that proves each one. Nothing in this
+section is an estimate.
+
+### 1. It compiles clean
+
+`CMakeLists.txt` puts `-Wall -Wextra` on the application target (`CMakeLists.txt:224`) and on the
+`aluchop_uishot` / `aluchop_e2e` verification targets (`:281`). `-Werror` is deliberately *not*
+enabled — warnings are loud, not fatal — so "0 warnings" is a result, not something the build script
+suppressed. The tree builds with **0 errors and 0 warnings**, producing a single ≈5.6 MB executable.
+
+```bash
+rm -rf build && ./build.sh            # or the two cmake commands above
+```
+
+To check one translation unit without building the tree — `./syntax-check.sh src/gui/OrdersPage.cpp`.
+
+### 2. The business logic is asserted end to end
+
+```bash
+cmake --build build --target aluchop_e2e
+./build/aluchop_e2e                   # exit 0 on a fully green run
+```
+
+`tests/e2e_test.cpp` (2,889 lines) stands up a **real** `services::AppContext` against a throwaway
+directory under the system temp dir — a fresh SQLite database, a fresh binary audit trail, a fresh
+log — so **your real database in `~/Library/Application Support/AluChop` is never opened**. It then
+makes **372 hard assertions** against the schema *exactly as the application ships it*: no
+constraint relaxed, no table rewritten, nothing stubbed. Each prints a `PASS` / `FAIL` line, the run
+ends with a `SUMMARY   assertions: N   passed: N   failed: 0` banner, and it exits non-zero if any
+assertion fails.
+
+Among what it asserts: the stored credential is a salted SHA-256 digest and never the plaintext ·
+two users with the same password get different salts *and* different hashes · the role gate really
+does refuse a waiter who tries to create an account · the grand total equals the sum of the seeded
+menu prices *exactly* and is **not** the subtotal grossed up by 13 % · `Taxable amount + VAT ==
+TOTAL` with no rounding drift · discounts are compared, never stacked · the recipe-driven stock
+deduction is all-or-nothing, and a refused deduction moves no stock at all · split totals sum back
+to the original subtotal and a merge sums both · a short tender is refused and change is exact ·
+the 128-byte audit records survive a round trip, sequence numbers start at 1 and strictly increase,
+and a single flipped byte inside a record is caught by its checksum.
+
+> **One known failure, stated rather than hidden.** Four of the 372 assertions fail whenever the
+> machine's **local** calendar date differs from the **UTC** date — the several-hour window either
+> side of midnight UTC. The report layer windows its date ranges in UTC (`dayStartUtc()`, used by
+> `SalesReport` and `OrdersReport`) while the dashboard's `ReportService::salesForDay()` windows on
+> the *local* day, so during that window a report for "today" comes back empty while the dashboard
+> shows the day's takings — two numbers about the same day that disagree. Run where the two dates
+> agree (`TZ=UTC ./build/aluchop_e2e`) and the suite is **372 / 372, exit 0**. It is a date-window
+> inconsistency in the report layer, not a money or persistence defect; it is listed under
+> *Future improvements* below, and the assertions that catch it are deliberately left in.
+
+### 3. The screenshots are the real UI
+
+`tools/uishot.cpp` builds the actual windows and has each one grab itself with `QWidget::grab()`,
+in both themes. Nothing in `docs/screenshots/` is a mock-up or a hand-drawn frame.
+
+```bash
+cmake --build build --target aluchop_uishot
+./build/aluchop_uishot                # writes the 16 PNGs into ./docs/screenshots
+```
+
+### 4. The layer rule holds
+
+The architecture section below gives two greps that must come back empty of *code* — the GUI never
+names a persistence type, and no SQL appears in the services layer.
+
+---
+
 ## Dependencies
 
 | Dependency | Version | Used for |
@@ -324,7 +399,7 @@ AluChop/
 │   │                           Audit · Notification · Commands · KitchenQueue
 │   └── gui/                    ThemeManager · SplashScreen · LoginWindow · MainWindow · Sidebar ·
 │                               Page + 9 pages · BillingDialog · CommandPalette · StatCard ·
-│                               Toast · Widgets · PdfExporter
+│                               Toast · Widgets · ChartKit · PdfExporter
 │
 ├── src/
 │   ├── core/  models/  persistence/  services/  gui/       mirrors include/
@@ -341,13 +416,14 @@ AluChop/
 │   ├── FLOWCHART.md            the order lifecycle, end to end
 │   ├── USE_CASE.md             actors, use cases, permission matrix
 │   ├── ER_DIAGRAM.md           the real SQLite schema, all 17 tables
-│   ├── OOP_COVERAGE.md         concept → file:line → why it is natural there
-│   └── screenshots/            generated by the aluchop_uishot target
+│   ├── OOP_COVERAGE.md         concept → file:line → why it is natural there, plus honest GAPS
+│   ├── ASSIGNMENT_BRIEF.pdf    the original coursework brief
+│   └── screenshots/            16 PNGs, generated by the aluchop_uishot target
 │
 ├── reports/                    generated CSV / PDF output
 ├── exports/                    generated backups and exports
-├── tests/                      e2e_test.cpp driver for the aluchop_e2e target
-└── tools/                      uishot.cpp driver for the aluchop_uishot target
+├── tests/e2e_test.cpp          372 assertions — the aluchop_e2e target
+└── tools/uishot.cpp            offscreen screenshot driver — the aluchop_uishot target
 ```
 
 ---
@@ -432,8 +508,10 @@ payroll?"* and *"what is your loyalty balance?"*.
 ## OOP concepts used
 
 The full, greppable matrix — **concept → `file:line` → why it is natural there** — is in
-**[`docs/OOP_COVERAGE.md`](docs/OOP_COVERAGE.md)**. Every site is also tagged in the source with a
-Doxygen marker:
+**[`docs/OOP_COVERAGE.md`](docs/OOP_COVERAGE.md)** — including a **GAPS** section that names, in
+writing, the two concepts that are implemented but not yet called by anything. Every site is also
+tagged in the source with a Doxygen marker — 440 of them across 137 files
+(`grep -rn "@oop-concept" include src | wc -l`):
 
 ```cpp
 /// @oop-concept Operator Overloading :: Order::operator+= IS the merge, expressed in code
@@ -457,9 +535,9 @@ Summary of where the syllabus lands, and why each site is real rather than a dem
 | **Method overriding** | `monthlyPay()`, `roleName()` (`final` in `Admin`), `refresh()`, `fromRecord()` | payroll, labels, UI refresh, hydration |
 | **Runtime polymorphism** | payroll over `vector<unique_ptr<Employee>>`; `CommandStack`; page `refresh()`; report export | concrete types chosen by a database string |
 | **Compile-time polymorphism** | overloads (`Logger::log`, `Order::addItem`, `AuditService::log`) + templates | same verb, different arity |
-| **Operator overloading** | `Money` `+ - * += -= *= == != < <= > >= <<`; `Order::operator+=` (merge), `operator[]`, `operator=`; `Customer::operator++` (prefix and postfix); `MenuItem::operator==` / `<`; `Bill::operator<<` | every one carries a domain meaning |
-| **Friend function / class** | `operator<<` for `Money` and `Bill`; `Bill` friends `BillingService` | streaming needs internals; only the billing engine may settle a bill |
-| **Static members** | `Order::s_openCount`, `Logger::s_messageCount`, `Database::instance()`, `ThemeManager::instance()` | process-wide state |
+| **Operator overloading** | `Money` `+ - * += -= *= == != < <= > >= <<`; `Order::operator+=` (merge), `operator[]`, `operator=`; `Customer::operator++` (prefix and postfix); `MenuItem::operator==` / `<`; `Bill::operator<<` | every one carries a domain meaning — `<<` is what writes the archival text receipt |
+| **Friend function / class** | `operator<<` for `Money` and `Bill`, `operator==` / `!=` for `MenuItem`; `Bill` friends `BillingService` | streaming needs internals; only the billing engine may settle a bill |
+| **Static members** | `Order::s_openCount`, `Logger::s_messageCount`, `Database::instance()`, `Logger::instance()`, `ThemeManager::instance()`, static `AuthService::hashPassword` | process-wide state and a pure function that needs no object |
 | **Constant objects / members** | `kAppInfo`, `kMenuCategories`, `Chef::kOvertimeRatePerHour`, `ThemeManager::kLight`/`kDark`; every observer is `const` | immutable identity and config |
 | **Copy constructor / assignment** | `Order` — deep-copies the line vector, resets id and order number | that *is* the split-bill feature |
 | **Destructor / RAII** | `Order` (counter), `BinaryRecordFile`, `CsvWriter`, `Logger` (flush + close) | resources genuinely need releasing |
@@ -467,13 +545,13 @@ Summary of where the syllabus lands, and why each site is real rather than a dem
 | **Class templates** | `Repository<T>`, `Result<T>` (+ a `Result<void>` specialisation) | the CRUD skeleton and the error carrier |
 | **STL** | `vector` throughout, `std::map` in the ingredient plan and the settings cache, `std::queue` in `KitchenQueue`, `std::sort` / `find_if` / `remove_if`, explicit iterators in `sumMoney` | real containers doing real work |
 | **File handling — append** | `Logger` — `std::ios::app` | every write lands at end of file |
-| **File handling — binary + random access** | `BinaryRecordFile` — 128-byte fixed records with `seekg` / `seekp` to any index, plus an additive checksum | audit lookup by index without scanning |
+| **File handling — binary + random access** | `BinaryRecordFile` — 128-byte fixed records with `seekg` / `seekp` to any index, plus an additive checksum; driven from the Reports audit **record browser** | audit lookup by index without scanning |
 | **File handling — ASCII + sequential** | `CsvWriter` — row by row, with cell escaping | report and backup exports |
 | **File handling — error checking** | every `open` / `seek` / `read` / `write` / `flush` tests the stream state and throws `FileIOException`; `BackupManager` checks the SQLite header magic before a restore | a silent partial write is worse than a loud failure |
 | **Exception hierarchy** | `AluChopException` → `Database`, `Validation`, `Auth`, `Inventory`, `FileIO` | one catchable base for the whole application |
 | **Multiple catch** | `main.cpp` (four subtypes + `std::exception` + `...`); `OrderService::advanceStatus` (`InventoryException` vs `DatabaseException` — genuinely different recoveries) | different faults deserve different explanations |
 | **Rethrow** | `Database::transaction` (roll back, then bare `throw;`), `AuditService::log`, `ReportGenerator::exportCsv` | a rollback or a failed audit write must never be swallowed |
-| **Namespaces** | `aluchop::core / models / persistence / services / gui` | the layer map itself |
+| **Namespaces** | `aluchop::core / models / persistence / services / gui`, plus nested `core::sage`, `core::tuning`, `gui::chartkit` | the layer map itself, and three vocabularies of constants and rules |
 
 ---
 
@@ -501,18 +579,24 @@ flowchart TD
     PER -.-> COR
 ```
 
-The rule is not aspirational — it is **greppable**, and both of these return nothing on the shipped
-tree:
+The rule is not aspirational — it is **greppable**. Neither of these returns a single line of
+*code* on the shipped tree; the only hits are prose inside `///` and `//` comments explaining why
+the boundary is where it is, which is why each command below filters comment lines out:
 
 ```bash
 # No SQL may appear in the services layer.
 grep -rnE 'QSqlQuery|QSqlDatabase|QSqlRecord|SELECT |INSERT |UPDATE |DELETE ' \
-     src/services include/aluchop/services
+     src/services include/aluchop/services | grep -vE '^\S+: *(\*|//|/\*)'
 
 # The GUI may not even NAME a persistence type. This is what
 # "the GUI never touches the database" means, mechanically.
-grep -rnE 'persistence::|aluchop/persistence/' src/gui include/aluchop/gui src/main.cpp
+grep -rnE 'persistence::|aluchop/persistence/' \
+     src/gui include/aluchop/gui src/main.cpp | grep -vE '^\S+: *(\*|//|/\*)'
 ```
+
+Run them without the filter and you get three comment lines: two in `src/services` describing an
+`ON DELETE SET NULL` foreign key, and one in `src/gui/EmployeesPage.cpp` naming
+`persistence::EmployeeRepository::update` to explain what the page deliberately does *not* call.
 
 **Composition root.** `services::AppContext` owns every repository and every service as a *value
 member* and hands out references. Its first member is a private `DbBootstrap` whose constructor
@@ -543,7 +627,7 @@ way it is, including where the shipped code differs from the contract).
 | [`docs/FLOWCHART.md`](docs/FLOWCHART.md) | The order lifecycle, the status ladder, the inventory deduction |
 | [`docs/USE_CASE.md`](docs/USE_CASE.md) | Actors, use cases, permission matrix, and what is actually enforced |
 | [`docs/ER_DIAGRAM.md`](docs/ER_DIAGRAM.md) | The real SQLite schema: 17 tables, keys, cardinalities, indices |
-| [`docs/OOP_COVERAGE.md`](docs/OOP_COVERAGE.md) | The syllabus matrix: concept → `file:line` → justification |
+| [`docs/OOP_COVERAGE.md`](docs/OOP_COVERAGE.md) | The syllabus matrix: concept → `file:line` → justification, plus an honest GAPS section |
 
 ---
 
@@ -561,20 +645,27 @@ Honest, in the order they would matter:
    status.
 3. **A visual floor plan.** Drag-arranged tables coloured by status would beat a reservations
    table for a real service.
-4. **Wire up the unused counters.** `Order::openOrderCount()` and `Logger::messagesLogged()` are
-   implemented but never called; a diagnostics panel is their natural home.
-5. **Ship menu photography.** `menu_items.image_path` and the loading code exist; no artwork ships,
+4. **Make the reports window on the local day.** `SalesReport` and `OrdersReport` build their
+   ranges with `dayStartUtc()` (`src/services/ReportGenerator.cpp:42`), while
+   `ReportService::salesForDay()` — the figure the dashboard shows — windows on the *local*
+   calendar day. For the few hours a day when the local and UTC dates disagree, a report for
+   "today" comes back empty while the dashboard shows takings. These are the four assertions the
+   e2e suite currently fails; see **Verification** above.
+5. **Wire up the unused counters.** `Order::openOrderCount()` and `Logger::messagesLogged()` are
+   implemented and correctly maintained but never called; a diagnostics panel is their natural home.
+6. **Ship menu photography.** `menu_items.image_path` and the loading code exist; no artwork ships,
    so the field is empty for all 126 items.
-6. **Multi-terminal operation.** The design is single-process and single-threaded by contract. A
+7. **Multi-terminal operation.** The design is single-process and single-threaded by contract. A
    networked till would mean a server process and per-connection `QSqlDatabase` handles — a real
    change, not a tweak.
-7. **Partial-payment splits.** Bills can be split *by line*; splitting a single bill across two
+8. **Partial-payment splits.** Bills can be split *by line*; splitting a single bill across two
    tenders is not supported.
-8. **Automated regression tests.** The `aluchop_e2e` CMake target exists for a headless
-   order→kitchen→serve→bill→pay assertion; growing it into a suite with a CI runner is the obvious
+9. **Put the e2e suite on a CI runner.** `tests/e2e_test.cpp` already makes 372 assertions against
+   the shipped schema, but it only runs when somebody types `./build/aluchop_e2e`. A GitHub Actions
+   job — plus assertions for the GUI slots, which the headless suite cannot reach — is the obvious
    next step.
-9. **Localisation.** The UI is English-only. Qt Linguist (`qttools` is already a dependency) would
-   make a Nepali translation straightforward.
+10. **Localisation.** The UI is English-only. Qt Linguist (`qttools` is already a dependency) would
+    make a Nepali translation straightforward.
 
 ---
 

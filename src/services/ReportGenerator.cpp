@@ -38,9 +38,21 @@ namespace aluchop::services {
 
 namespace {
 
-/// @brief Midnight UTC at the start of @p d — timestamps are stored ISO-8601 UTC (§6).
-QDateTime dayStartUtc(QDate d) {
-    return d.startOfDay(QTimeZone::UTC);
+/**
+ * @brief Local midnight at the start of @p d — the opening moment of that business day.
+ *
+ * This MUST match `ReportService`'s `dayStartLocal`, and for the same reason. Timestamps are
+ * *stored* ISO-8601 UTC (docs/ARCHITECTURE.md §6), but storage format and business meaning are
+ * different things: the repository converts these instants to UTC on the way into SQL.
+ *
+ * Windowing the *day* in UTC as well would be wrong for a restaurant in Nepal (UTC+05:45), where a
+ * UTC day runs 05:45 → 05:45 local. It also silently disagreed with the dashboard: `ReportService`
+ * windows on the local day, so a sale rung up after local midnight-minus-the-offset fell outside
+ * the report's UTC window entirely and every report read zero while the dashboard read the true
+ * takings. The takings belong to the date that was on the wall when the guest paid.
+ */
+QDateTime dayStartLocal(QDate d) {
+    return d.startOfDay(QTimeZone::LocalTime);
 }
 
 /// @brief Human date for a report cell.
@@ -121,7 +133,7 @@ std::vector<QStringList> SalesReport::rows() const {
     for (int i = 0; i < span; ++i) {
         const QDate day = m_from.addDays(i);
         const std::vector<models::Payment> taken =
-            m_payments.between(dayStartUtc(day), dayStartUtc(day.addDays(1)));
+            m_payments.between(dayStartLocal(day), dayStartLocal(day.addDays(1)));
 
         /// @oop-concept Function Template :: core::sumMoney adds a projected Money field over any
         /// container — the same helper that totals an order's lines totals a day's payments.
@@ -206,7 +218,7 @@ std::vector<QStringList> OrdersReport::rows() const {
         end = m_from.addDays(kMaxRangeDays - 1);
 
     const std::vector<models::Order> orders =
-        m_orders.between(dayStartUtc(m_from), dayStartUtc(end.addDays(1)));
+        m_orders.between(dayStartLocal(m_from), dayStartLocal(end.addDays(1)));
 
     out.reserve(orders.size());
     for (const models::Order& o : orders) {

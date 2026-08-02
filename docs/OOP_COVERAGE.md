@@ -82,7 +82,7 @@ depends on this".
 
 | # | Concept | File:line | Code sketch | Why it is natural here |
 |---|---|---|---|---|
-| 15 | Multiple classes | 86 headers / 77 sources (`find include -name '*.hpp' \| wc -l`) | headers: `models` (22) · `gui` (22) · `persistence` (20) · `services` (16) · `core` (6) | Not a count for its own sake: each class owns one responsibility, and the layer boundaries (§5.1 #13) are what stop a widget touching SQL. |
+| 15 | Multiple classes | 86 headers / 77 sources | headers: `models` (22) · `gui` (22) · `persistence` (20) · `services` (16) · `core` (6) | Not a count for its own sake: each class owns one responsibility, and the layer boundaries (§5.1 #13) are what stop a widget touching SQL. |
 | 16 | Objects | `src/services/EmployeeService.cpp:293` | `models::StaffCustomer fused(guest->id(), …, hit->position(), hit->salary(), hit->shift());` | A concrete object built from two database rows and then queried for both its staff discount and its loyalty points. |
 | 17 | Constructors | `src/models/Order.cpp:140` | `Order::Order() : m_createdAt(QDateTime::currentDateTimeUtc()) { ++s_openCount; }` | Registers the object in the live-order counter — construction has a real side effect. (The counter's public accessor is not yet read by any screen: see GAPS G8.) |
 | 18 | Destructor | `src/persistence/BinaryRecordFile.cpp:55-62` | `~BinaryRecordFile() { if (m_stream.is_open()) { m_stream.flush(); m_stream.close(); } }` | RAII on a file handle. Deliberately **does not throw** — the comment on line 57 explains that throwing during stack unwinding calls `std::terminate`. Also `Order::~Order` (`Order.cpp`) decrements the static counter; `CsvWriter::~CsvWriter` (`CsvWriter.cpp:40`) flushes a half-written export. |
@@ -364,7 +364,7 @@ closure is stated with the line that closes it so a reader can check rather than
 | G4 | a comment overclaimed a Reports record browser | **CLOSED** — the browser was built |
 | G5 | `Namespaces` and `Strings` had no `@oop-concept` tag | **PARTLY CLOSED** — `Namespaces` now tagged, `Strings` still not |
 | G6 | only one friend *class* exists | **OPEN** |
-| G7 | `tests/` was empty | **CLOSED** — 270 assertions now live there |
+| G7 | `tests/` was empty | **CLOSED** — 372 assertions now live there |
 | G8 | two public counters are implemented but never read | **OPEN** (new finding) |
 
 ---
@@ -427,22 +427,27 @@ friend *functions* also exist: `operator<<` for `Money` and `Bill`, and `operato
 `MenuItem`.)
 
 **G7 — CLOSED. `tests/` now holds an executable end-to-end suite.**
-`tests/e2e_test.cpp` is 2,174 lines and builds as the `aluchop_e2e` CMake target. It stands up a
+`tests/e2e_test.cpp` is 2,889 lines and builds as the `aluchop_e2e` CMake target. It stands up a
 **real** `services::AppContext` against a throwaway data directory under the system temp dir — so
 the migrator seeds a fresh SQLite database, a fresh binary audit trail and a fresh log, and the
-user's real database is never opened — then makes **270 hard assertions** against the schema exactly
+user's real database is never opened — then makes **372 hard assertions** against the schema exactly
 as the application ships it, printing a PASS/FAIL line for each and exiting non-zero on any failure.
 Among other things it asserts that the stored credential is a salted SHA-256 digest and never the
 plaintext, that two users with the same password get different salts *and* different hashes, that
-the role gate actually refuses a waiter, that `total = subtotal − discount + serviceCharge` with no
-tax term, that the inventory deduction is all-or-nothing, and that the binary audit trail's
-checksums and sequence numbers survive a round trip. Claims in this document therefore no longer
-rest on reading alone. **Honest caveat:** one of the 270 currently fails when the machine's local
-calendar date differs from the UTC date — the Orders *report* windows its date range in UTC
-(`ReportGenerator.cpp:209`, `dayStartUtc`) while the dashboard's `salesForDay` windows on the local
-day, so for the few hours a day when the two disagree the report returns 0 rows for "today". Run
-under `TZ=UTC` the suite is 270/270. That is a real inconsistency in the report layer, not a flaw in
-any concept above, and it is recorded here rather than hidden.
+the role gate actually refuses a waiter, that the grand total is the sum of the seeded menu prices
+exactly and **not** the subtotal grossed up by 13 %, that `Taxable amount + VAT == TOTAL` with no
+rounding drift, that the inventory deduction is all-or-nothing, that split totals sum back to the
+original subtotal, and that the binary audit trail's checksums and sequence numbers survive a round
+trip while a single flipped byte is caught. Several concepts documented above are therefore now
+covered by an automated assertion rather than by reading alone.
+
+**Honest caveat:** four of the 372 fail when the machine's local calendar date differs from the UTC
+date. The report layer windows its ranges in UTC (`ReportGenerator.cpp:42`, `dayStartUtc`) while the
+dashboard's `ReportService::salesForDay()` windows on the *local* day, so for the several hours a
+day when the two disagree a report for "today" returns nothing while the dashboard shows takings.
+Run where the two dates agree (`TZ=UTC ./build/aluchop_e2e`) the suite is 372/372, exit 0. That is a
+real inconsistency in the report layer, not a flaw in any concept above, and it is recorded here
+rather than hidden.
 
 **G8 — OPEN (new). Two public counters are implemented, maintained, and never read.**
 `Order::openOrderCount()` and `Logger::messagesLogged()` are correct — `Order::s_openCount` is
