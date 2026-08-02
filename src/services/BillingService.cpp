@@ -15,10 +15,22 @@
  *    the single LARGEST wins and the others are discarded, never summed.
  *  - **The service charge is applied after the discount** and is a percentage of the *subtotal*,
  *    so discounting a bill can never quietly shrink the service the staff earned.
+ *
+ * @par Two renderings of one receipt
+ * A settled bill leaves this service in two shapes and they are produced by two different
+ * mechanisms on purpose:
+ *  - the **guest-facing** 46-column receipt, `models::Bill::toPrintableText()` (the IPrintable
+ *    contract), which the billing dialog shows and the PDF exporter prints;
+ *  - the **archival** plain-text copy, written by streaming the Bill into a `std::ostringstream`
+ *    through `models::operator<<(std::ostream&, const models::Bill&)`. That form is Qt-free and
+ *    locale-independent, which is exactly what belongs in the append-mode `<fstream>` journal.
+ *    Every settlement writes one, so the stream operator is on the live payment path.
  */
 
 #include "aluchop/services/BillingService.hpp"
 
+#include <sstream>
+#include <string>
 #include <utility>
 
 #include <QDate>
@@ -57,6 +69,24 @@ struct DiscountCandidate {
     QString label;        ///< Printed beside the discount line, e.g. "Staff 10%".
     QString promoCode;    ///< Non-empty only when this candidate came from a promo code.
 };
+
+/**
+ * @brief Renders the archival plain-text copy of a bill through the stream insertion operator.
+ *
+ * `models::operator<<(std::ostream&, const models::Bill&)` is a friend of `Bill`, so it reads the
+ * private figures straight out of the snapshot and writes every amount through
+ * `core::operator<<(std::ostream&, const core::Money&)`. Nothing here re-computes money and
+ * nothing here touches Qt formatting: the result is the same figures the guest's receipt carries,
+ * in a locale-independent form.
+ *
+ * @oop-concept Stream Insertion Operator :: the bill (and every Money on it) writes itself into a
+ *              std::ostringstream — the same overload an std::ofstream would take
+ */
+std::string streamedReceipt(const models::Bill& bill) {
+    std::ostringstream out;
+    out << bill;
+    return out.str();
+}
 
 /// @brief Loyalty rule: one point per NPR 100 actually paid.
 int pointsFor(core::Money total) noexcept {
@@ -255,6 +285,25 @@ core::Result<models::Payment> BillingService::settle(int orderId, models::Bill& 
         /// become "paid" — and it runs after the payment row is safely committed, never before.
         bill.settle(method, paid, change);
 
+        // --- archival plain-text receipt ------------------------------------------------------
+        // The settled bill streams itself into a std::ostringstream and the result is appended to
+        // the raw <fstream> application log, so every receipt this till issues survives as text
+        // outside SQLite. The journal is a *copy*, not the authoritative record — the binary audit
+        // trail written below is — so a log file that cannot be written is reported to the user
+        // rather than allowed to unwind a payment that is already committed.
+        try {
+            core::Logger::instance().info(
+                QStringLiteral("RECEIPT %1 · %2")
+                    .arg(order->orderNumber(),
+                         QString::fromStdString(streamedReceipt(bill)).trimmed()));
+        } catch (const core::FileIOException& logFailure) {
+            m_notify.notify(QStringLiteral("Receipt journal unavailable"),
+                            QStringLiteral("The payment is recorded, but its plain-text copy "
+                                           "could not be appended: %1")
+                                .arg(exceptionText(logFailure)),
+                            2);
+        }
+
         m_audit.log(QStringLiteral("ORDER_PAID"), orderTag(orderId), total,
                     QStringLiteral("%1 %2").arg(models::toString(method), total.toString()));
         m_notify.announceDataChanged(QStringLiteral("orders"));
@@ -283,7 +332,9 @@ core::Money BillingService::changeFor(core::Money total, core::Money tendered) c
 }
 
 QString BillingService::receiptText(const models::Bill& bill) const {
-    // The receipt is the Bill's own job (IPrintable); billing does not re-render money anywhere.
+    // The guest-facing receipt is the Bill's own job (IPrintable); billing does not re-render
+    // money anywhere. Its archival twin — the same figures streamed through operator<< — is
+    // written by settle() into the append-mode journal, so the two never diverge.
     return bill.toPrintableText();
 }
 

@@ -16,32 +16,45 @@
 #include "aluchop/gui/OrdersPage.hpp"
 
 #include <QAbstractItemView>
+#include <QApplication>
 #include <QColor>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFont>
+#include <QFontMetrics>
 #include <QFormLayout>
 #include <QFrame>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHash>
 #include <QHeaderView>
+#include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
+#include <QList>
+#include <QListView>
 #include <QListWidget>
 #include <QListWidgetItem>
+#include <QMargins>
 #include <QMessageBox>
 #include <QModelIndex>
 #include <QModelIndexList>
+#include <QPainter>
 #include <QPalette>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QRect>
+#include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QSize>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QString>
 #include <QStringList>
+#include <QStyle>
+#include <QStyleOptionViewItem>
+#include <QStyledItemDelegate>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
@@ -68,7 +81,16 @@
 namespace aluchop::gui {
 namespace {
 
-constexpr int kIdRole = Qt::UserRole;  ///< order id / menu-item id carried by a row
+constexpr int kIdRole = Qt::UserRole;            ///< order id / menu-item id carried by a row
+constexpr int kNameRole = Qt::UserRole + 1;      ///< dish name, drawn by PickerRowDelegate
+constexpr int kCategoryRole = Qt::UserRole + 2;  ///< dish section, drawn under the name
+constexpr int kPriceRole = Qt::UserRole + 3;     ///< pre-formatted, tax-inclusive NPR price
+
+// Kitchen-pass geometry — the numbers fitKitchenPanel() needs to turn a row count into a height.
+constexpr int kRowMargin = 2;        ///< QSS `QListWidget::item { margin: 1px 0px }`, both edges
+constexpr int kListPadding = 12;     ///< QSS `QListWidget { padding: 5px }` plus a hair of slack
+constexpr int kPanelChrome = 90;     ///< card margins + heading + subtitle + the spacings between
+constexpr int kMinPassHeight = 148;  ///< below this the card stops reading as a deliberate panel
 
 // ---------------------------------------------------------------------------
 // Presentation helpers
@@ -177,45 +199,228 @@ QVBoxLayout* buildPanel(const QString& title, QWidget* parent, QFrame** outPanel
     return column;
 }
 
-/// A picker row: dish name on the left, tax-inclusive price on the right.
-QWidget* pickerRow(const models::MenuItem& item, const Palette& pal, QWidget* parent) {
-    auto* row = new QWidget(parent);
-    row->setAutoFillBackground(false);
-    auto* h = new QHBoxLayout(row);
-    h->setContentsMargins(4, 5, 4, 5);
-    h->setSpacing(10);
+/**
+ * @brief Draws one two-line row: the identifying name on top, a quiet caption under it.
+ *
+ * Used twice on this screen — once for a dish in the POS picker (name over its section, with the
+ * tax-inclusive price parked at the right end of the *caption* line) and once for a line on the
+ * current ticket (dish over "2 × Rs 450.00"). Both rows are the same shape, so they are the same
+ * delegate.
+ *
+ * @par Why the price sits on the second line
+ * It used to share line one with the name, taking ~90 px off the name's budget. In a POS pane
+ * that is the difference between "Barahsinghe Lager (650ml)" and "Barahsinghe La…", and a dish
+ * you cannot read is a dish you cannot sell. The name now owns the full row width; the price
+ * keeps its right-hand anchor one line down, where the only thing it competes with is a short
+ * section caption.
+ *
+ * @par Why a delegate and not a row of QLabels
+ * The previous implementation put a small widget in every row with QListWidget::setItemWidget.
+ * That looks harmless and is not: the generated stylesheet gives `QListWidget::item` a
+ * `padding: 9px 12px`, and Qt hands an item widget only the *content* rectangle — 18 px shorter
+ * and 24 px narrower than the row. Two stacked labels were therefore squeezed into less height
+ * than they needed and the dish name printed straight through the section beneath it, on every
+ * single row. Painting the row instead removes the dependency on someone else's padding
+ * entirely (this delegate owns its own) and spares the screen 126 throw-away widget trees on
+ * every keystroke in the search box.
+ *
+ * @oop-concept Runtime Polymorphism :: QListView calls paint()/sizeHint() through the abstract
+ *              QAbstractItemDelegate interface; the view has no idea what a dish looks like
+ * @oop-concept Method Overriding :: rows carrying no dish (the "no dishes match" placeholder,
+ *              and every cell of the ticket's amount column) fall through to the inherited
+ *              QStyledItemDelegate behaviour untouched
+ */
+class PickerRowDelegate : public QStyledItemDelegate {
+public:
+    /// @param parent owning view (Qt parent-owned; a delegate is never owned by the view itself).
+    explicit PickerRowDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
 
-    auto* name = new QLabel(item.name(), row);
-    QFont nf = name->font();
-    nf.setWeight(QFont::DemiBold);
-    name->setFont(nf);
+    /// @return a two-line row, tall enough that descenders never touch the line below.
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        if (!index.data(kNameRole).isValid())
+            return QStyledItemDelegate::sizeHint(option, index);
+        const QFontMetrics nameFm(nameFont(option.font));
+        return QSize(0, 2 * kPadV + nameFm.height() + kLineGap + captionHeight(option.font));
+    }
 
-    auto* category = new QLabel(item.category(), row);
-    QPalette cp = category->palette();
-    cp.setColor(QPalette::WindowText, pal.textMuted);
-    category->setPalette(cp);
-    QFont cf = category->font();
-    cf.setPointSize(std::max(8, cf.pointSize() - 1));
-    category->setFont(cf);
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override {
+        if (!index.data(kNameRole).isValid()) {
+            QStyledItemDelegate::paint(painter, option, index);
+            return;
+        }
 
-    auto* left = new QVBoxLayout();
-    left->setSpacing(0);
-    left->addWidget(name);
-    left->addWidget(category);
+        // Let the style paint the row's own background so hover, selection and the rounded
+        // corners keep coming from ThemeManager rather than from a hard-coded colour here.
+        QStyleOptionViewItem opt(option);
+        initStyleOption(&opt, index);
+        opt.text.clear();
+        opt.icon = QIcon();
+        opt.features &= ~QStyleOptionViewItem::HasDisplay;
+        QStyle* style = opt.widget ? opt.widget->style() : QApplication::style();
+        style->drawControl(QStyle::CE_ItemViewItem, &opt, painter, opt.widget);
 
-    auto* price = new QLabel(core::formatNpr(item.price()), row);
-    price->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    QFont pf = price->font();
-    pf.setWeight(QFont::DemiBold);
-    price->setFont(pf);
-    QPalette pp = price->palette();
-    pp.setColor(QPalette::WindowText, pal.primary);
-    price->setPalette(pp);
+        const Palette& pal = ThemeManager::instance().palette();
+        const QFont nameF = nameFont(option.font);
+        const QFont sectionF = sectionFont(option.font);
+        const QFont priceF = priceFont(option.font);
+        const QFontMetrics nameFm(nameF);
+        const QFontMetrics sectionFm(sectionF);
+        const QFontMetrics priceFm(priceF);
 
-    h->addLayout(left, 1);
-    h->addWidget(price, 0);
-    return row;
-}
+        const QString priceText = index.data(kPriceRole).toString();
+        const int priceWidth =
+            priceText.isEmpty() ? 0 : priceFm.horizontalAdvance(priceText) + kPriceGap;
+
+        const QRect body = option.rect.adjusted(kPadH, kPadV, -kPadH, -kPadV);
+        const int caption = captionHeight(option.font);
+
+        // Centre the two-line block in whatever height the row actually got.
+        const int block = nameFm.height() + kLineGap + caption;
+        const int top = body.top() + std::max(0, (body.height() - block) / 2);
+        const int secondTop = top + nameFm.height() + kLineGap;
+
+        painter->save();
+
+        // Line one belongs to the identifier alone — it is never shortened to make room for
+        // anything else on the row.
+        painter->setFont(nameF);
+        painter->setPen(pal.text);
+        painter->drawText(QRect(body.left(), top, body.width(), nameFm.height()),
+                          Qt::AlignLeft | Qt::AlignVCenter,
+                          nameFm.elidedText(index.data(kNameRole).toString(), Qt::ElideRight,
+                                            body.width()));
+
+        const int captionWidth = std::max(0, body.width() - priceWidth);
+        painter->setFont(sectionF);
+        painter->setPen(pal.textMuted);
+        painter->drawText(QRect(body.left(), secondTop, captionWidth, caption),
+                          Qt::AlignLeft | Qt::AlignVCenter,
+                          sectionFm.elidedText(index.data(kCategoryRole).toString(),
+                                               Qt::ElideRight, captionWidth));
+
+        if (!priceText.isEmpty()) {
+            painter->setFont(priceF);
+            painter->setPen(pal.primary);
+            painter->drawText(QRect(body.right() - priceWidth + kPriceGap, secondTop,
+                                    priceWidth - kPriceGap + 1, caption),
+                              Qt::AlignRight | Qt::AlignVCenter, priceText);
+        }
+        painter->restore();
+    }
+
+private:
+    static constexpr int kPadH = 12;      ///< own horizontal padding, independent of any QSS
+    static constexpr int kPadV = 11;      ///< own vertical padding — the row's breathing room
+    static constexpr int kLineGap = 3;    ///< never 0: the caption must clear the name's descenders
+    static constexpr int kPriceGap = 14;  ///< gutter between an elided caption and the price
+
+    /// @oop-concept Static Members :: pure font derivations, no per-delegate state to carry
+    static QFont nameFont(const QFont& base) {
+        QFont f = base;
+        f.setWeight(QFont::DemiBold);
+        return f;
+    }
+    static QFont sectionFont(const QFont& base) {
+        QFont f = base;
+        f.setPointSize(std::max(8, base.pointSize() - 1));
+        return f;
+    }
+    /// The price shares the caption line, so it shares the caption size — only the weight and
+    /// the colour mark it out.
+    static QFont priceFont(const QFont& base) {
+        QFont f = sectionFont(base);
+        f.setWeight(QFont::DemiBold);
+        return f;
+    }
+    /// Tallest of the two things that can appear on line two.
+    static int captionHeight(const QFont& base) {
+        return std::max(QFontMetrics(sectionFont(base)).height(),
+                        QFontMetrics(priceFont(base)).height());
+    }
+};
+
+/**
+ * @brief A list whose viewport is always a whole number of rows tall.
+ *
+ * A scrolling panel that ends in a row sliced through the middle looks broken rather than
+ * scrollable. This list keeps the leftover pixels as a bottom margin instead of as half a dish,
+ * so the picker always ends on a clean row edge however the splitter is dragged.
+ *
+ * @oop-concept Single Inheritance :: behaviour is inherited wholesale; only the two hooks that
+ *              know when the geometry changed (resizeEvent, rowsInserted) are overridden
+ */
+class WholeRowListWidget : public QListWidget {
+public:
+    /// @param parent owning widget.
+    explicit WholeRowListWidget(QWidget* parent = nullptr) : QListWidget(parent) {}
+
+protected:
+    void resizeEvent(QResizeEvent* event) override {
+        QListWidget::resizeEvent(event);
+        snapToWholeRows();
+    }
+
+    void rowsInserted(const QModelIndex& parent, int start, int end) override {
+        QListView::rowsInserted(parent, start, end);
+        snapToWholeRows();
+    }
+
+private:
+    /// Parks the remainder of the division in the bottom margin. Idempotent: recomputing after
+    /// the viewport has shrunk yields the same answer and returns without touching anything.
+    void snapToWholeRows() {
+        const QMargins margins = viewportMargins();
+        const int step = count() > 0 ? sizeHintForRow(0) : 0;
+        const int wanted = step > 0 ? (viewport()->height() + margins.bottom()) % step : 0;
+        if (wanted == margins.bottom()) return;
+        setViewportMargins(margins.left(), margins.top(), margins.right(), wanted);
+    }
+};
+
+/**
+ * @brief A table whose viewport is always a whole number of rows tall.
+ *
+ * A scrolling list that ends in a row sliced through the middle reads as broken rather than as
+ * scrollable — and the floor list is the one place on this screen where a half-drawn order number
+ * would be mistaken for a real one. The leftover pixels become a bottom margin instead.
+ *
+ * @oop-concept Multilevel Inheritance :: QTableWidget → ElegantTable (the house table style) →
+ *              this screen's whole-row refinement; each level adds exactly one idea
+ */
+class WholeRowTable : public ElegantTable {
+public:
+    /// @param headers column captions.
+    /// @param parent owning widget.
+    explicit WholeRowTable(const QStringList& headers, QWidget* parent = nullptr)
+        : ElegantTable(headers, parent) {}
+
+protected:
+    void resizeEvent(QResizeEvent* event) override {
+        ElegantTable::resizeEvent(event);
+        snapToWholeRows();
+    }
+
+    void rowsInserted(const QModelIndex& parent, int start, int end) override {
+        QTableView::rowsInserted(parent, start, end);
+        snapToWholeRows();
+    }
+
+private:
+    /// Parks the remainder of the division in the bottom margin.
+    ///
+    /// @note The left/top/right margins are read back and preserved, never assumed: QTableView
+    ///       keeps its own header sizes there, and overwriting them would push the column header
+    ///       on top of the first row. Only the bottom is ours.
+    void snapToWholeRows() {
+        const QMargins margins = viewportMargins();
+        const int step = verticalHeader()->defaultSectionSize();
+        const int wanted =
+            (step > 0 && rowCount() > 0) ? (viewport()->height() + margins.bottom()) % step : 0;
+        if (wanted == margins.bottom()) return;
+        setViewportMargins(margins.left(), margins.top(), margins.right(), wanted);
+    }
+};
 
 /// Centred "nothing here" row for a list widget.
 void addEmptyRow(QListWidget* list, const QString& text, const QColor& colour) {
@@ -224,6 +429,49 @@ void addEmptyRow(QListWidget* list, const QString& text, const QColor& colour) {
     item->setTextAlignment(Qt::AlignCenter);
     item->setForeground(colour);
     item->setSizeHint(QSize(0, 60));
+}
+
+/**
+ * @brief Gives the Kitchen Pass exactly the height its tickets need, and the rest to the floor.
+ *
+ * A splitter divides whatever it is given, so a pass holding one line and a floor list holding
+ * fifteen orders used to be handed the same two fixed slabs: a half-empty kitchen card with a
+ * scrollbar on content that fits, next to an orders list that had run out of room. Re-seeding the
+ * split from the board's real content height after every refresh fixes both ends at once, and the
+ * handle still drags because these are only sizes, not constraints.
+ *
+ * @param page the OrdersPage (the splitter is found by object name — no new member is needed).
+ * @param board the freshly repopulated kitchen list.
+ */
+void fitKitchenPanel(const QWidget* page, QListWidget* board) {
+    auto* leftSplitter = page->findChild<QSplitter*>(QStringLiteral("posLeftSplitter"));
+    if (!leftSplitter || leftSplitter->count() < 2 || !board) return;
+
+    int content = 0;
+    for (int row = 0; row < board->count(); ++row) {
+        const QListWidgetItem* item = board->item(row);
+        content += (item ? item->sizeHint().height() : 0) + kRowMargin;
+    }
+    content += kListPadding;
+
+    const QList<int> current = leftSplitter->sizes();
+    // The splitter's own height is authoritative once it has been laid out; during construction
+    // it is still zero, and the seeded sizes are the only truth there is.
+    const int laidOut = leftSplitter->height() - leftSplitter->handleWidth();
+    const int total = laidOut > kMinPassHeight * 2 ? laidOut : current.at(0) + current.at(1);
+
+    // Never smaller than a card that reads as deliberate, never more than two fifths of the
+    // column — the floor list is the one that has to keep growing.
+    const int wanted = std::max(kMinPassHeight,
+                                std::min(content + kPanelChrome, std::max(1, total * 2 / 5)));
+
+    // A ceiling, not a suggestion. setSizes() alone is rescaled by QSplitter whenever the column
+    // is a different height than it was when the sizes were computed, which is exactly the case
+    // on the very first layout — and a pass that grows past its own content is the half-empty
+    // panel this is here to prevent.
+    if (QWidget* panel = leftSplitter->widget(1)) panel->setMaximumHeight(wanted);
+    if (wanted == current.at(1)) return;
+    leftSplitter->setSizes(QList<int>{std::max(1, total - wanted), wanted});
 }
 
 /// Re-runs the menu query behind the POS picker.
@@ -250,12 +498,20 @@ void populatePicker(services::AppContext& ctx, QWidget* page) {
         return;
     }
     for (const models::MenuItem& item : items) {
+        // The row carries data, not widgets: PickerRowDelegate paints the name, its section and
+        // the price, sizes the row from the real font metrics and elides instead of ever asking
+        // the list to scroll sideways.
         auto* entry = new QListWidgetItem(list);
         entry->setData(kIdRole, item.id());
-        entry->setToolTip(item.description().isEmpty() ? item.name() : item.description());
-        auto* row = pickerRow(item, pal, list);
-        entry->setSizeHint(row->sizeHint().expandedTo(QSize(0, 46)));
-        list->setItemWidget(entry, row);
+        entry->setData(kNameRole, item.name());
+        entry->setData(kCategoryRole, item.category());
+        entry->setData(kPriceRole, core::formatNpr(item.price()));
+        entry->setToolTip(item.description().isEmpty()
+                              ? QStringLiteral("%1  ·  %2").arg(item.name(),
+                                                                core::formatNpr(item.price()))
+                              : QStringLiteral("%1  ·  %2\n%3")
+                                    .arg(item.name(), core::formatNpr(item.price()),
+                                         item.description()));
     }
 }
 
@@ -320,25 +576,27 @@ void fillTicket(services::AppContext& ctx, QWidget* page, QTableWidget* itemsVie
     for (const models::OrderItem& line : order->items()) {
         itemsView->insertRow(row);
 
+        // The dish column is painted by PickerRowDelegate: the name owns the full width of the
+        // column and the quantity/unit price ride underneath it as a caption. That is what keeps
+        // "Barahsinghe Lager (650ml)" readable in a ticket pane that used to show it as
+        // "Barahsinghe La…" — nothing on the ticket competes with the dish for line one.
+        QString caption = QStringLiteral("%1 × %2")
+                              .arg(line.qty())
+                              .arg(core::formatNpr(line.unitPrice()));
+        if (!line.note().isEmpty()) caption += QStringLiteral("  ·  %1").arg(line.note());
+
         auto* nameCell = new QTableWidgetItem(line.name());
-        QFont nf = nameCell->font();
-        nf.setWeight(QFont::DemiBold);
-        nameCell->setFont(nf);
-        if (!line.note().isEmpty()) nameCell->setToolTip(line.note());
+        nameCell->setData(kNameRole, line.name());
+        nameCell->setData(kCategoryRole, caption);
+        nameCell->setToolTip(QStringLiteral("%1\n%2").arg(line.name(), caption));
         itemsView->setItem(row, 0, nameCell);
 
-        auto* qtyCell = new QTableWidgetItem(QStringLiteral("x%1").arg(line.qty()));
-        qtyCell->setTextAlignment(Qt::AlignCenter);
-        itemsView->setItem(row, 1, qtyCell);
-
-        auto* unitCell = new QTableWidgetItem(core::formatNpr(line.unitPrice()));
-        unitCell->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        unitCell->setForeground(pal.textMuted);
-        itemsView->setItem(row, 2, unitCell);
-
         auto* lineCell = new QTableWidgetItem(core::formatNpr(line.lineTotal()));
+        QFont lf = lineCell->font();
+        lf.setWeight(QFont::DemiBold);
+        lineCell->setFont(lf);
         lineCell->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        itemsView->setItem(row, 3, lineCell);
+        itemsView->setItem(row, 1, lineCell);
 
         ++row;
     }
@@ -595,21 +853,36 @@ OrdersPage::OrdersPage(services::AppContext& ctx, QWidget* parent) : Page(ctx, p
 
     // Pane 1: the floor — active orders on top, the kitchen pass underneath.
     auto* leftSplitter = new QSplitter(Qt::Vertical, splitter);
+    leftSplitter->setObjectName(QStringLiteral("posLeftSplitter"));
     leftSplitter->setChildrenCollapsible(false);
     leftSplitter->setHandleWidth(14);
 
     QFrame* ordersPanel = nullptr;
     QVBoxLayout* ordersColumn = buildPanel(QStringLiteral("Active Orders"), leftSplitter,
                                            &ordersPanel);
-    m_orderList = new ElegantTable(
+    // The order number is the primary identifier of this whole screen — "ORD-20…01-007" is not an
+    // order number, it is a shrug. It therefore takes the stretch column and every pixel of slack
+    // the pane has, while the four short columns size themselves to their content; the pane below
+    // is seeded wide enough that a 16-character number never has to give a character up.
+    m_orderList = new WholeRowTable(
         QStringList{QStringLiteral("Order"), QStringLiteral("Type"), QStringLiteral("Table"),
                     QStringLiteral("Status"), QStringLiteral("Total")},
         ordersPanel);
     m_orderList->setSortingEnabled(false);
-    m_orderList->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    // No corner box: the vertical header is hidden, so QTableCornerButton would only ever render
+    // as a bare grey square in the bottom-right corner that reads as a stray checkbox.
+    m_orderList->setCornerButtonEnabled(false);
+    // Deliberately NOT ScrollBarAlwaysOff: four of the five columns are content-sized, so a window
+    // dragged to its absolute minimum can still want more width than it has, and suppressing the
+    // bar there would leave the Total column clipped and unreachable rather than merely off-screen.
+    // Should the window ever be dragged narrower than the order number, lose the middle rather
+    // than the tail: the trailing serial is the part a waiter actually reads out.
+    m_orderList->setTextElideMode(Qt::ElideMiddle);
+    m_orderList->horizontalHeader()->setStretchLastSection(false);
+    m_orderList->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_orderList->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     m_orderList->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    m_orderList->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
+    m_orderList->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     m_orderList->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
     ordersColumn->addWidget(m_orderList, 1);
     leftSplitter->addWidget(ordersPanel);
@@ -623,10 +896,18 @@ OrdersPage::OrdersPage(services::AppContext& ctx, QWidget* parent) : Page(ctx, p
     m_kitchenBoard->setFrameShape(QFrame::NoFrame);
     m_kitchenBoard->setSelectionMode(QAbstractItemView::NoSelection);
     m_kitchenBoard->setFocusPolicy(Qt::NoFocus);
+    // A long ticket line elides; it never widens the board into a sideways scroll (which would
+    // also drag a grey scroll-area corner box in with it).
+    m_kitchenBoard->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_kitchenBoard->setTextElideMode(Qt::ElideRight);
+    m_kitchenBoard->setWordWrap(false);
     kitchenColumn->addWidget(m_kitchenBoard, 1);
     leftSplitter->addWidget(kitchenPanel);
-    leftSplitter->setStretchFactor(0, 3);
-    leftSplitter->setStretchFactor(1, 2);
+    // The pass is sized to the tickets it is actually holding (see fitKitchenPanel): an empty
+    // pass is a compact one-line card and the floor list takes the height instead, rather than a
+    // half-empty panel showing a scrollbar over three identical placeholders.
+    leftSplitter->setStretchFactor(0, 5);
+    leftSplitter->setStretchFactor(1, 0);
     splitter->addWidget(leftSplitter);
 
     // Pane 2: the menu picker.
@@ -647,10 +928,18 @@ OrdersPage::OrdersPage(services::AppContext& ctx, QWidget* parent) : Page(ctx, p
     tagWidget(pickerSearch, QStringLiteral("posSearch"));
     pickerColumn->addWidget(pickerSearch);
 
-    auto* pickerList = new QListWidget(pickerPanel);
+    auto* pickerList = new WholeRowListWidget(pickerPanel);
     pickerList->setObjectName(QStringLiteral("posItems"));
     pickerList->setFrameShape(QFrame::NoFrame);
     pickerList->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    // Every row elides itself to the viewport, so sideways scrolling is never needed. Switching
+    // the bar off also removes the scroll-area corner box that used to sit under it.
+    pickerList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    pickerList->setResizeMode(QListView::Adjust);  // re-lay the rows out when the pane is resized
+    pickerList->setWordWrap(false);
+    pickerList->setUniformItemSizes(false);
+    pickerList->setMinimumHeight(200);
+    pickerList->setItemDelegate(new PickerRowDelegate(pickerList));
     pickerColumn->addWidget(pickerList, 1);
 
     auto* addRow = new QHBoxLayout();
@@ -660,9 +949,15 @@ OrdersPage::OrdersPage(services::AppContext& ctx, QWidget* parent) : Page(ctx, p
     qty->setRange(1, 99);
     qty->setValue(1);
     qty->setMinimumHeight(36);
+    // 12px of QSS padding either side, a 2px border and a 27px stepper gutter — "x 99" needs
+    // this much before the prefix starts getting sliced.
+    qty->setFixedWidth(92);
     qty->setPrefix(QStringLiteral("x "));
     auto* addToOrderBtn = makeButton(QStringLiteral("Add to order"),
                                      QStringLiteral("primaryButton"), pickerPanel);
+    // The caption must never be sliced by the button edge: 13px semibold + the 18px QSS padding
+    // needs this much room even when the pane is at its narrowest.
+    addToOrderBtn->setMinimumWidth(140);
     connect(addToOrderBtn, &QPushButton::clicked, this, &OrdersPage::onAddItemToOrder);
     addRow->addWidget(qty, 0);
     addRow->addWidget(addToOrderBtn, 1);
@@ -685,16 +980,23 @@ OrdersPage::OrdersPage(services::AppContext& ctx, QWidget* parent) : Page(ctx, p
     ticketNote->setVisible(false);
     ticketColumn->addWidget(ticketNote);
 
+    // Two columns, not four. A ticket line is one dish and one amount; the quantity and the unit
+    // price are a caption under the dish name (see fillTicket), which is both how a printed
+    // restaurant bill reads and the only way the dish name gets a column wide enough to be read
+    // in a pane this size. No information was dropped — it moved to where there is room for it.
     m_itemsView = new ElegantTable(
-        QStringList{QStringLiteral("Item"), QStringLiteral("Qty"), QStringLiteral("Unit"),
-                    QStringLiteral("Line total")},
-        ticketPanel);
+        QStringList{QStringLiteral("Item"), QStringLiteral("Amount")}, ticketPanel);
     m_itemsView->setSortingEnabled(false);
     m_itemsView->setSelectionMode(QAbstractItemView::ExtendedSelection);  // split needs multi-select
+    m_itemsView->setCornerButtonEnabled(false);  // no bare grey square in the bottom-right corner
+    m_itemsView->setWordWrap(false);
+    m_itemsView->setItemDelegate(new PickerRowDelegate(m_itemsView));
+    // Tall enough for the delegate's two lines plus its own padding; anything shorter and the
+    // caption would be clipped rather than centred.
+    m_itemsView->verticalHeader()->setDefaultSectionSize(58);
+    m_itemsView->horizontalHeader()->setStretchLastSection(false);
     m_itemsView->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_itemsView->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_itemsView->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    m_itemsView->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
     ticketColumn->addWidget(m_itemsView, 1);
 
     auto* totalRow = new QHBoxLayout();
@@ -711,8 +1013,12 @@ OrdersPage::OrdersPage(services::AppContext& ctx, QWidget* parent) : Page(ctx, p
     totalRow->addWidget(ticketTotal, 0);
     ticketColumn->addLayout(totalRow);
 
-    auto* ticketActions = new QHBoxLayout();
-    ticketActions->setSpacing(8);
+    // Four captions on one line cannot survive a narrow ticket pane — a QPushButton clips its
+    // text rather than eliding it, which is how "Send to kitchen" became "nd to kitch". Two rows
+    // of two always fit, and it puts the settle action in the natural bottom-right corner.
+    auto* ticketActions = new QGridLayout();
+    ticketActions->setHorizontalSpacing(8);
+    ticketActions->setVerticalSpacing(8);
     auto* removeBtn = makeButton(QStringLiteral("Remove line"), QStringLiteral("ghostButton"),
                                  ticketPanel);
     connect(removeBtn, &QPushButton::clicked, this, &OrdersPage::onRemoveItemFromOrder);
@@ -723,23 +1029,36 @@ OrdersPage::OrdersPage(services::AppContext& ctx, QWidget* parent) : Page(ctx, p
                                   ticketPanel);
     tagWidget(advanceBtn, QStringLiteral("advanceButton"));
     connect(advanceBtn, &QPushButton::clicked, this, &OrdersPage::onAdvanceStatus);
-    auto* billBtn = makeButton(QStringLiteral("Bill & settle"), QStringLiteral("primaryButton"),
+    // "&&" — a single ampersand is swallowed by Qt as a mnemonic and renders as "Bill_settle".
+    auto* billBtn = makeButton(QStringLiteral("Bill && settle"), QStringLiteral("primaryButton"),
                                ticketPanel);
     connect(billBtn, &QPushButton::clicked, this, &OrdersPage::onBill);
 
-    ticketActions->addWidget(removeBtn);
-    ticketActions->addWidget(fireBtn);
-    ticketActions->addWidget(advanceBtn);
-    ticketActions->addWidget(billBtn);
+    ticketActions->addWidget(removeBtn, 0, 0);
+    ticketActions->addWidget(fireBtn, 0, 1);
+    ticketActions->addWidget(advanceBtn, 1, 0);
+    ticketActions->addWidget(billBtn, 1, 1);
+    ticketActions->setColumnStretch(0, 1);
+    ticketActions->setColumnStretch(1, 1);
     ticketColumn->addLayout(ticketActions);
     splitter->addWidget(ticketPanel);
 
-    splitter->setStretchFactor(0, 3);
+    splitter->setStretchFactor(0, 4);
     splitter->setStretchFactor(1, 3);
-    splitter->setStretchFactor(2, 4);
-    leftSplitter->setMinimumWidth(300);
-    pickerPanel->setMinimumWidth(260);
-    ticketPanel->setMinimumWidth(320);
+    splitter->setStretchFactor(2, 5);
+    // Minimums add up to just under the narrowest MainWindow (1140 - 232 rail - margins), so no
+    // pane is ever squeezed into clipping its own content.
+    leftSplitter->setMinimumWidth(320);
+    pickerPanel->setMinimumWidth(280);
+    ticketPanel->setMinimumWidth(230);
+    // Stretch factors alone only govern *extra* space, and the panes' own size hints skewed the
+    // opening layout badly enough that the floor pane could not show a whole order number. Seed
+    // the split explicitly instead; QSplitter scales these proportionally to whatever width it
+    // actually gets. The numbers are the measured width each pane needs to show its widest real
+    // content untruncated: a 16-character order number plus three short columns on the left, a
+    // full dish name in the picker, a full dish name plus an amount on the ticket.
+    splitter->setSizes(QList<int>{590, 295, 380});
+    leftSplitter->setSizes(QList<int>{400, 160});
     root->addWidget(splitter, 1);
 
     // --- wiring --------------------------------------------------------------
@@ -806,13 +1125,18 @@ void OrdersPage::refresh() {
                 numberCell->setFont(nf);
                 m_orderList->setItem(row, 0, numberCell);
 
-                m_orderList->setItem(row, 1, new QTableWidgetItem(typeText(order.type())));
-                m_orderList->setItem(
-                    row, 2,
-                    new QTableWidgetItem(order.tableId() > 0
-                                             ? tableNames.value(order.tableId(),
-                                                                QStringLiteral("#%1").arg(order.tableId()))
-                                             : QStringLiteral("—")));
+                auto* typeCell = new QTableWidgetItem(typeText(order.type()));
+                typeCell->setForeground(pal.textMuted);
+                m_orderList->setItem(row, 1, typeCell);
+
+                auto* tableCell = new QTableWidgetItem(
+                    order.tableId() > 0
+                        ? tableNames.value(order.tableId(),
+                                           QStringLiteral("#%1").arg(order.tableId()))
+                        : QStringLiteral("—"));
+                tableCell->setTextAlignment(Qt::AlignCenter);
+                tableCell->setForeground(pal.textMuted);
+                m_orderList->setItem(row, 2, tableCell);
 
                 auto* statusCell = new QTableWidgetItem(statusText(order.status()));
                 statusCell->setForeground(statusColour(order.status(), pal));
@@ -823,6 +1147,9 @@ void OrdersPage::refresh() {
 
                 auto* totalCell = new QTableWidgetItem(core::formatNpr(order.subtotal()));
                 totalCell->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                QFont tf = totalCell->font();
+                tf.setWeight(QFont::DemiBold);
+                totalCell->setFont(tf);
                 m_orderList->setItem(row, 4, totalCell);
 
                 if (order.id() == previouslySelected) restoreRow = row;
@@ -845,54 +1172,70 @@ void OrdersPage::refresh() {
         if (restoreRow >= 0) m_orderList->selectRow(restoreRow);
 
         // --- kitchen board ----------------------------------------------------
-        m_kitchenBoard->clear();
+        // Read the three rungs first, then decide what the board should say. An empty pass gets
+        // ONE honest line — three stacked "— clear —" placeholders under three headings read as
+        // a broken widget, not as a quiet kitchen, and they used to overflow the panel into a
+        // scrollbar over content that fits.
         const models::OrderStatus board[3] = {models::OrderStatus::Pending,
                                               models::OrderStatus::Preparing,
                                               models::OrderStatus::Ready};
-        int ticketsOnPass = 0;
-        for (const models::OrderStatus status : board) {
-            auto* heading = new QListWidgetItem(statusText(status).toUpper(), m_kitchenBoard);
-            heading->setFlags(Qt::NoItemFlags);
-            heading->setForeground(pal.textMuted);
-            QFont hf = heading->font();
-            hf.setWeight(QFont::DemiBold);
-            hf.setPointSize(std::max(8, hf.pointSize() - 1));
-            heading->setFont(hf);
-            heading->setSizeHint(QSize(0, 30));
-
-            const std::vector<models::Order> tickets = m_ctx.orders().withStatus(status);
-            if (tickets.empty()) {
-                auto* none = new QListWidgetItem(QStringLiteral("    — clear —"), m_kitchenBoard);
-                none->setFlags(Qt::NoItemFlags);
-                none->setForeground(pal.textMuted);
-                none->setSizeHint(QSize(0, 26));
-                continue;
-            }
-            for (const models::Order& ticket : tickets) {
-                QString label = QStringLiteral("    %1  ·  %2 item%3")
-                                    .arg(ticket.orderNumber())
-                                    .arg(ticket.itemCount())
-                                    .arg(ticket.itemCount() == 1 ? QString() : QStringLiteral("s"));
-                if (ticket.tableId() > 0)
-                    label += QStringLiteral("  ·  %1")
-                                 .arg(tableNames.value(ticket.tableId(),
-                                                       QStringLiteral("#%1").arg(ticket.tableId())));
-                auto* entry = new QListWidgetItem(label, m_kitchenBoard);
-                entry->setFlags(Qt::NoItemFlags);
-                entry->setForeground(statusColour(status, pal));
-                entry->setSizeHint(QSize(0, 28));
-                if (!ticket.note().isEmpty()) entry->setToolTip(ticket.note());
-                ++ticketsOnPass;
-            }
+        std::vector<models::Order> queue[3];
+        std::size_t ticketsOnPass = 0;
+        for (int rung = 0; rung < 3; ++rung) {
+            queue[rung] = m_ctx.orders().withStatus(board[rung]);
+            ticketsOnPass += queue[rung].size();
         }
+
+        m_kitchenBoard->clear();
         if (ticketsOnPass == 0) {
             auto* none = new QListWidgetItem(
-                QStringLiteral("Nothing on the pass right now."), m_kitchenBoard);
+                QStringLiteral("Nothing on the pass — no ticket has been fired yet."),
+                m_kitchenBoard);
             none->setFlags(Qt::NoItemFlags);
             none->setTextAlignment(Qt::AlignCenter);
             none->setForeground(pal.textMuted);
-            none->setSizeHint(QSize(0, 44));
+            none->setSizeHint(QSize(0, 46));
+        } else {
+            for (int rung = 0; rung < 3; ++rung) {
+                auto* heading =
+                    new QListWidgetItem(statusText(board[rung]).toUpper(), m_kitchenBoard);
+                heading->setFlags(Qt::NoItemFlags);
+                heading->setForeground(pal.textMuted);
+                QFont hf = heading->font();
+                hf.setWeight(QFont::DemiBold);
+                hf.setPointSize(std::max(8, hf.pointSize() - 1));
+                heading->setFont(hf);
+                heading->setSizeHint(QSize(0, 30));
+
+                if (queue[rung].empty()) {
+                    // Meaningful here, because the rungs either side of it are carrying tickets.
+                    auto* none =
+                        new QListWidgetItem(QStringLiteral("    — clear —"), m_kitchenBoard);
+                    none->setFlags(Qt::NoItemFlags);
+                    none->setForeground(pal.textMuted);
+                    none->setSizeHint(QSize(0, 26));
+                    continue;
+                }
+                for (const models::Order& ticket : queue[rung]) {
+                    QString label =
+                        QStringLiteral("    %1  ·  %2 item%3")
+                            .arg(ticket.orderNumber())
+                            .arg(ticket.itemCount())
+                            .arg(ticket.itemCount() == 1 ? QString() : QStringLiteral("s"));
+                    if (ticket.tableId() > 0)
+                        label += QStringLiteral("  ·  %1")
+                                     .arg(tableNames.value(
+                                         ticket.tableId(),
+                                         QStringLiteral("#%1").arg(ticket.tableId())));
+                    auto* entry = new QListWidgetItem(label, m_kitchenBoard);
+                    entry->setFlags(Qt::NoItemFlags);
+                    entry->setForeground(statusColour(board[rung], pal));
+                    entry->setSizeHint(QSize(0, 28));
+                    if (!ticket.note().isEmpty()) entry->setToolTip(ticket.note());
+                }
+            }
         }
+        fitKitchenPanel(this, m_kitchenBoard);
 
         // --- the ticket -------------------------------------------------------
         fillTicket(m_ctx, this, m_itemsView, selectedOrderId());

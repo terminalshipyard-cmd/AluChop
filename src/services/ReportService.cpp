@@ -6,6 +6,12 @@
  * Two jobs live here: the small aggregates the dashboard paints, and the factory that hands out a
  * concrete `ReportGenerator` for a chosen kind and date range.
  *
+ * @note **Every `QDate` crossing this interface is a LOCAL calendar date.** A business day opens at
+ *       local midnight and closes at the next one, because that is the day the restaurant and its
+ *       guests live in; see `dayStartLocal()` below for why a UTC-windowed "day" quietly misfiles a
+ *       Nepali restaurant's early-morning takings. Callers pass `QDate::currentDate()` (or a
+ *       `QDateEdit` value) — never `QDateTime::currentDateTimeUtc().date()`.
+ *
  * @warning Every money figure is `core::Money` (integer paisa) end to end. Not one revenue number
  *          in this file is ever a `double`, not even on the way to a chart — QtCharts is fed from
  *          `Money::paisa()` at the presentation edge, never from a floating-point accumulator.
@@ -30,9 +36,52 @@ namespace aluchop::services {
 
 namespace {
 
-/// Timestamps are stored ISO-8601 UTC (docs/ARCHITECTURE.md §6), so windows are built in UTC.
-QDateTime dayStartUtc(QDate d) {
-    return d.startOfDay(QTimeZone::UTC);
+/**
+ * @brief Local midnight at the start of @p d — the moment that business day opens.
+ *
+ * **Windowing contract (binding for every caller of this service):** every `QDate` handed to
+ * `ReportService` is a **LOCAL calendar date** — exactly what `QDate::currentDate()` and a
+ * `QDateEdit` produce — and a business day runs from local midnight to the next local midnight.
+ *
+ * Timestamps are *stored* ISO-8601 UTC (docs/ARCHITECTURE.md §6), but storage format and business
+ * meaning are different things: the instants below are converted to UTC inside the repository, on
+ * the way into SQL. Windowing the *day* in UTC as well would be wrong for a restaurant in Nepal
+ * (UTC+05:45), where a UTC day runs 05:45 → 05:45 local: every sale rung up before a quarter to six
+ * in the morning — the tail of the previous night's service — would be filed under the day before,
+ * and "today's sales" on the dashboard would silently disagree with the date printed beside it.
+ * The rule that makes the figures defensible is the one a restaurateur already uses: the takings
+ * belong to the date that was on the wall when the guest paid.
+ */
+QDateTime dayStartLocal(QDate d) {
+    return d.startOfDay(QTimeZone::LocalTime);
+}
+
+/**
+ * @brief The exclusive upper bound that still includes everything settled up to and including @p at.
+ *
+ * `payments.paid_at` is stored truncated to whole seconds, so a bill settled at 12:00:00.400 sits on
+ * disk as `12:00:00`. Asking for `paid_at < now` with `now = 12:00:00.912` therefore cannot match it
+ * — the bound truncates to the very same `12:00:00` — and the sale disappears from the report until
+ * the clock ticks over. Rounding the bound up to the start of the next second keeps the window
+ * half-open while covering the whole of the second we are currently living in, which is what "up to
+ * now" was always meant to say. (The repository snaps mid-second bounds the same way; doing it here
+ * as well is not belt-and-braces but intent: this is the call site that means *inclusive of now*,
+ * and it stays correct even in the one run in a thousand where `now` lands exactly on a second.)
+ */
+QDateTime throughInstant(const QDateTime& at) {
+    return at.addMSecs(1000 - at.time().msec());
+}
+
+/**
+ * @brief Rejects a window that cannot be asked of the database.
+ *
+ * `QDate::startOfDay` returns an *invalid* QDateTime for a date a time zone skipped wholesale, and
+ * an invalid bound formats to an empty string in SQL — where `paid_at >= ''` is true of every row
+ * ever written. Refusing the window keeps a nonexistent day reading zero instead of "all revenue,
+ * ever".
+ */
+bool windowIsSane(const QDateTime& from, const QDateTime& to) {
+    return from.isValid() && to.isValid() && from < to;
 }
 
 /// A chart with more points than this is unreadable anyway, and a mis-set picker must not stall
@@ -69,11 +118,18 @@ ReportService::ReportService(const persistence::PaymentRepository& payments,
 // Revenue aggregates
 // ---------------------------------------------------------------------------
 
+/// @param day a LOCAL calendar date — the business day whose takings are wanted.
 core::Money ReportService::salesForDay(QDate day) const {
     if (!day.isValid())
         return core::Money::zero();
+
+    const QDateTime from = dayStartLocal(day);
+    const QDateTime to = dayStartLocal(day.addDays(1));   // exclusive: the next day's opening moment
+    if (!windowIsSane(from, to))
+        return core::Money::zero();
+
     try {
-        return m_payments.revenueBetween(dayStartUtc(day), dayStartUtc(day.addDays(1)));
+        return m_payments.revenueBetween(from, to);
     } catch (const core::AluChopException& ex) {
         core::Logger::instance().error(QStringLiteral("sales for %1 could not be read: %2")
                                            .arg(day.toString(Qt::ISODate), exceptionText(ex)));
@@ -103,8 +159,15 @@ core::Money ReportService::salesForMonth(int year, int month) const {
     if (!first.isValid())
         return core::Money::zero();
 
+    // One window for the whole month rather than 28–31 day queries: the boundaries are the same
+    // local midnights, so the figure is identical to summing the days, for a thirtieth of the work.
+    const QDateTime from = dayStartLocal(first);
+    const QDateTime to = dayStartLocal(first.addMonths(1));
+    if (!windowIsSane(from, to))
+        return core::Money::zero();
+
     try {
-        return m_payments.revenueBetween(dayStartUtc(first), dayStartUtc(first.addMonths(1)));
+        return m_payments.revenueBetween(from, to);
     } catch (const core::AluChopException& ex) {
         core::Logger::instance().error(
             QStringLiteral("sales for %1-%2 could not be read: %3")
@@ -117,8 +180,12 @@ std::vector<std::pair<QString, int>> ReportService::popularItems(int topN) const
     if (topN < 1)
         return {};
 
-    const QDateTime to = QDateTime::currentDateTimeUtc();
+    // A trailing 30 days ending *now* — and "now" has to mean now: this card is repainted the
+    // instant a bill is settled, so the sale that was just rung up must already be in it.
+    const QDateTime to = throughInstant(QDateTime::currentDateTimeUtc());
     const QDateTime from = to.addDays(-kPopularWindowDays);
+    if (!windowIsSane(from, to))
+        return {};
 
     try {
         return m_payments.popularItems(from, to, topN);
@@ -129,6 +196,7 @@ std::vector<std::pair<QString, int>> ReportService::popularItems(int topN) const
     }
 }
 
+/// @param from,to LOCAL calendar dates, inclusive at both ends — one chart point per business day.
 std::vector<std::pair<QDate, core::Money>> ReportService::revenueSeries(QDate from, QDate to) const {
     std::vector<std::pair<QDate, core::Money>> series;
     if (!from.isValid() || !to.isValid() || from > to)

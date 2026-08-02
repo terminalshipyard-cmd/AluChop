@@ -28,8 +28,10 @@
 
 #include <QColor>
 #include <QEvent>
+#include <QFont>
 #include <QFrame>
 #include <QGraphicsDropShadowEffect>
+#include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -37,6 +39,7 @@
 #include <QListWidgetItem>
 #include <QObject>
 #include <QPoint>
+#include <QSize>
 #include <QVBoxLayout>
 #include <QVariant>
 
@@ -151,6 +154,47 @@ struct Hit {
     QString primary;    ///< bold-ish main line
     QString secondary;  ///< quiet trailing detail
 };
+
+/// @return a small-caps section caption for a group header row.
+///
+/// The letter spacing has to be set on the QFont: Qt Style Sheets have no `letter-spacing`
+/// property, and a header that is merely upper-case at body size still reads as another result.
+QLabel* makeSectionLabel(const QString& caption) {
+    auto* label = new QLabel(caption);
+    label->setObjectName(QStringLiteral("paletteSectionHeader"));
+    label->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    label->setContentsMargins(12, 10, 12, 2);
+    QFont font = label->font();
+    font.setLetterSpacing(QFont::AbsoluteSpacing, 1.3);
+    label->setFont(font);
+    return label;
+}
+
+/// @return one result row: prominent name on the left, quiet metadata right-aligned.
+///
+/// Both the row and its labels are transparent to the mouse so the QListWidget underneath still
+/// receives the click, the hover wash and the selection — the widgets are presentation only.
+QWidget* makeResultRow(const QString& primary, const QString& secondary) {
+    auto* row = new QWidget;
+    row->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+
+    auto* line = new QHBoxLayout(row);
+    line->setContentsMargins(14, 6, 14, 6);
+    line->setSpacing(16);
+
+    auto* name = new QLabel(primary, row);
+    name->setObjectName(QStringLiteral("paletteRowName"));
+    name->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    line->addWidget(name, 1);
+
+    auto* meta = new QLabel(secondary, row);
+    meta->setObjectName(QStringLiteral("paletteRowMeta"));
+    meta->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    meta->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    line->addWidget(meta, 0);
+
+    return row;
+}
 
 /// Ranks and truncates one source's candidates.
 void rank(std::vector<Hit>& hits, int limit) {
@@ -332,20 +376,28 @@ void CommandPalette::onQueryChanged(const QString& q) {
     }
 
     // ---- render the merged list -------------------------------------------------------------
+    // A result is two facts of different importance — *what* it is and *what about it* — so it is
+    // built as two labels rather than as one string with a gap in it. The name carries the row;
+    // the metadata is smaller, quieter and right-aligned, where the eye can ignore it until it is
+    // wanted. Group captions are section labels, not rows: small, upper-case, letter-spaced and
+    // muted, so the list reads as four groups instead of as one undifferentiated column.
     const auto addSection = [this](const QString& caption, const std::vector<Hit>& hits) {
         if (hits.empty()) {
             return;
         }
-        auto* header = new QListWidgetItem(caption.toUpper(), m_results);
+        auto* header = new QListWidgetItem(m_results);
         header->setData(kKindRole, kKindHeader);
         header->setFlags(Qt::NoItemFlags);
+        header->setSizeHint(QSize(0, 30));
+        m_results->setItemWidget(header, makeSectionLabel(caption.toUpper()));
 
         for (const Hit& hit : hits) {
-            auto* row = new QListWidgetItem(
-                QStringLiteral("%1        %2").arg(hit.primary, hit.secondary), m_results);
+            auto* row = new QListWidgetItem(m_results);
             row->setData(kKindRole, hit.kind);
             row->setData(kIdRole, hit.id);
-            row->setToolTip(hit.secondary);
+            row->setToolTip(QStringLiteral("%1  —  %2").arg(hit.primary, hit.secondary));
+            row->setSizeHint(QSize(0, 46));
+            m_results->setItemWidget(row, makeResultRow(hit.primary, hit.secondary));
         }
     };
 
@@ -355,10 +407,16 @@ void CommandPalette::onQueryChanged(const QString& q) {
     addSection(QStringLiteral("Orders"), tickets);
 
     if (m_results->count() == 0) {
-        auto* empty = new QListWidgetItem(
-            QStringLiteral("No matches for “%1”").arg(query), m_results);
+        auto* empty = new QListWidgetItem(m_results);
         empty->setData(kKindRole, kKindHeader);
         empty->setFlags(Qt::NoItemFlags);
+        empty->setSizeHint(QSize(0, 56));
+
+        auto* label = new QLabel(QStringLiteral("No matches for “%1”").arg(query));
+        label->setObjectName(QStringLiteral("paletteRowMeta"));
+        label->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        label->setAlignment(Qt::AlignCenter);
+        m_results->setItemWidget(empty, label);
         return;
     }
 

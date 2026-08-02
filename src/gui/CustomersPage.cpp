@@ -13,11 +13,13 @@
 #include "aluchop/gui/CustomersPage.hpp"
 
 #include <algorithm>
+#include <initializer_list>
 #include <vector>
 
 #include <QAbstractAnimation>
 #include <QAbstractItemView>
 #include <QComboBox>
+#include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QEasingCurve>
@@ -63,6 +65,7 @@ constexpr int kPageSpacing = 18;   ///< vertical rhythm between page bands
 constexpr int kPanelPad = 18;      ///< inner padding of a card / glass panel
 constexpr int kControlH = 38;      ///< uniform height of buttons and inputs
 constexpr int kFadeMs = 220;       ///< entrance animation duration
+constexpr int kRowH = 44;          ///< ElegantTable's row height — panels size in whole rows
 
 /// @return the live palette; every colour on this screen is read from here, never literal hex.
 const Palette& theme() { return ThemeManager::instance().palette(); }
@@ -200,6 +203,96 @@ private:
     bool m_played = false;  ///< the entrance plays exactly once
 };
 
+/// @brief Gives a table a column policy that cannot starve its identity column.
+///
+/// `ElegantTable` turns on `stretchLastSection`, so the last column hoards the spare width while
+/// an earlier `Stretch` column is squeezed to the header minimum — which is how a directory with
+/// room to spare still showed "sujan.adhikari@exa…".
+///
+/// The rule this settles on: **exactly one Stretch column, and it is the identity column.**
+/// Everything else — a phone, an e-mail, a count, a points balance — is `ResizeToContents`, so it
+/// takes precisely the width its longest value needs and never a pixel less. An e-mail address
+/// therefore cannot be elided by a name column sitting on slack it does not need, and the name
+/// column still absorbs whatever is left over.
+///
+/// @param table          the table to configure.
+/// @param stretchColumns the identity column(s) that absorb the spare width.
+/// @param minSection     narrowest any column may become, in pixels.
+void configureColumns(QTableWidget* table, std::initializer_list<int> stretchColumns,
+                      int minSection = 76) {
+    QHeaderView* head = table->horizontalHeader();
+    head->setStretchLastSection(false);
+    head->setMinimumSectionSize(minSection);
+    for (int column = 0; column < table->columnCount(); ++column) {
+        const bool stretch =
+            std::find(stretchColumns.begin(), stretchColumns.end(), column) !=
+            stretchColumns.end();
+        head->setSectionResizeMode(column, stretch ? QHeaderView::Stretch
+                                                   : QHeaderView::ResizeToContents);
+    }
+    table->setTextElideMode(Qt::ElideRight);
+    table->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+}
+
+/// @brief Opens a sortable table A→Z on @p column instead of Z→A.
+///
+/// `QHeaderView` starts with a descending sort indicator, and `setSortingEnabled(true)` honours
+/// it — which is why a customer directory opened on "Sujan … Aakriti". A directory is read
+/// alphabetically, so the indicator is set explicitly.
+void sortAscendingBy(QTableWidget* table, int column) {
+    table->horizontalHeader()->setSortIndicator(column, Qt::AscendingOrder);
+    table->sortItems(column, Qt::AscendingOrder);
+}
+
+/// @brief Repeats a cell's own text as its tooltip, so an elided cell is never lost data.
+QTableWidgetItem* withTooltip(QTableWidgetItem* cell, const QString& detail = QString()) {
+    cell->setToolTip(detail.isEmpty() ? cell->text() : detail);
+    return cell;
+}
+
+/// @brief Keeps a table an exact number of whole rows tall.
+///
+/// A panel hands its table whatever height is left over, which is almost never a whole multiple
+/// of the row height — so the bottom row was drawn sliced through the middle. Capping the table
+/// at `header + n · rowHeight` turns those leftover pixels into bottom padding inside the card,
+/// which reads as deliberate space instead of a clipped row. The height is measured from the
+/// container the layout actually resizes, never from the (capped) table, so the table still grows
+/// when the window does.
+///
+/// @oop-concept Method Overriding :: QObject::eventFilter is overridden to react to another
+///              widget's resize without subclassing that widget
+class WholeRowFitter : public QObject {
+public:
+    /// @param table the table to snap.
+    /// @param container the widget the layout resizes (the table's stack); also the Qt parent.
+    WholeRowFitter(QTableWidget* table, QWidget* container)
+        : QObject(container), m_table(table), m_container(container) {
+        container->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (watched == m_container &&
+            (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
+            snap();
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    void snap() {
+        const int rowH = m_table->verticalHeader()->defaultSectionSize();
+        const int headH = m_table->horizontalHeader()->sizeHint().height();
+        const int available = m_container->height() - headH;
+        if (rowH <= 0 || available < rowH) return;
+        const int target = headH + (available / rowH) * rowH;
+        if (m_table->maximumHeight() != target) m_table->setMaximumHeight(target);
+    }
+
+    QTableWidget* m_table;
+    QWidget* m_container;
+};
+
 /// @brief Prepares a table for a full repopulation (sorting off while rows are inserted).
 void beginRepopulate(QTableWidget* table) {
     table->setSortingEnabled(false);
@@ -303,12 +396,11 @@ CustomersPage::CustomersPage(services::AppContext& ctx, QWidget* parent) : Page(
                                            QStringLiteral("E-mail"), QStringLiteral("Visits"),
                                            QStringLiteral("Loyalty")},
                                directory);
-    m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-    m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-    m_table->setMinimumWidth(420);
+    // Only the name stretches. The e-mail column then sizes to the longest address on file, which
+    // is what stops "rojina.maharjan@exa…" happening beside a name column sitting on spare width.
+    configureColumns(m_table, {0});
+    sortAscendingBy(m_table, 0);
+    m_table->setMinimumWidth(560);
 
     auto* directoryEmpty =
         new EmptyState(QStringLiteral("No customers yet"),
@@ -321,6 +413,8 @@ CustomersPage::CustomersPage(services::AppContext& ctx, QWidget* parent) : Page(
     directoryStack->setObjectName(QStringLiteral("customersDirectoryStack"));
     directoryStack->addWidget(m_table);
     directoryStack->addWidget(directoryEmpty);
+    directoryStack->setMinimumHeight(6 * kRowH);  // whole rows, never one sliced in half
+    new WholeRowFitter(m_table, directoryStack);
     directoryCol->addWidget(directoryStack, 1);
     body->addWidget(directory, 3);
 
@@ -364,18 +458,28 @@ CustomersPage::CustomersPage(services::AppContext& ctx, QWidget* parent) : Page(
     m_favourites->setWordWrap(true);
     profileCol->addWidget(m_favourites);
 
-    profileCol->addWidget(makeLabel(QStringLiteral("VISIT HISTORY"),
-                                    QStringLiteral("mutedLabel"), profile, 10, QFont::DemiBold));
+    // The visit counter and the itemised history are two different measurements of the same
+    // guest, and the screen used to let them contradict each other ("3 visits" beside "has not
+    // been served here so far"). They are reconciled in one place instead: this caption states
+    // how many of the counted visits have an itemised bill behind them.
+    auto* historyHead = new QHBoxLayout;
+    historyHead->setSpacing(8);
+    historyHead->addWidget(makeLabel(QStringLiteral("VISIT HISTORY"),
+                                     QStringLiteral("mutedLabel"), profile, 10, QFont::DemiBold));
+    historyHead->addStretch(1);
+    auto* historyCount = makeLabel(QString(), QStringLiteral("mutedLabel"), profile, 10);
+    historyCount->setObjectName(QStringLiteral("customerHistoryCount"));
+    historyHead->addWidget(historyCount);
+    profileCol->addLayout(historyHead);
 
     m_history = new ElegantTable(QStringList{QStringLiteral("Date"), QStringLiteral("Order"),
                                              QStringLiteral("Items"), QStringLiteral("Total")},
                                  profile);
     m_history->setSortingEnabled(false);
-    m_history->verticalHeader()->setDefaultSectionSize(36);
-    m_history->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    m_history->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_history->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-    m_history->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    m_history->verticalHeader()->setDefaultSectionSize(38);
+    // "Items" is the only free-text column, so it is the only one allowed to stretch; the order
+    // number is an identifier and sizes to itself rather than being elided.
+    configureColumns(m_history, {2});
 
     auto* historyEmpty = new EmptyState(QStringLiteral("No visits recorded"),
                                         QStringLiteral("Settled orders appear here."), profile);
@@ -383,6 +487,8 @@ CustomersPage::CustomersPage(services::AppContext& ctx, QWidget* parent) : Page(
     historyStack->setObjectName(QStringLiteral("customersHistoryStack"));
     historyStack->addWidget(m_history);
     historyStack->addWidget(historyEmpty);
+    historyStack->setMinimumHeight(4 * kRowH);
+    new WholeRowFitter(m_history, historyStack);
     profileCol->addWidget(historyStack, 1);
 
     auto* profileActions = new QHBoxLayout;
@@ -407,10 +513,18 @@ CustomersPage::CustomersPage(services::AppContext& ctx, QWidget* parent) : Page(
     connect(m_table, &QTableWidget::itemDoubleClicked, this,
             [this](QTableWidgetItem*) { onEdit(); });
     connect(deleteBtn, &QPushButton::clicked, this, &CustomersPage::onDelete);
+    // The profile panel must follow the selection, however the selection moved — a click, a
+    // keyboard arrow, or a programmatic selectRow() after a search. Both signals are wired
+    // because neither alone covers all three, and onShowHistory() is idempotent.
     connect(m_table, &QTableWidget::itemSelectionChanged, this, [this]() {
         if (BusyGuard::busy(this)) return;  // ignore the churn a repopulation causes
         onShowHistory();
     });
+    connect(m_table, &QTableWidget::currentCellChanged, this,
+            [this](int, int, int, int) {
+                if (BusyGuard::busy(this)) return;
+                onShowHistory();
+            });
     connect(redeemBtn, &QPushButton::clicked, this, [this]() {
         const int id = selectedCustomerId();
         if (id == 0) {
@@ -507,14 +621,15 @@ void CustomersPage::refresh() {
             QFont nameFont = nameCell->font();
             nameFont.setWeight(QFont::DemiBold);
             nameCell->setFont(nameFont);
-            m_table->setItem(rowIndex, 0, nameCell);
+            m_table->setItem(rowIndex, 0, withTooltip(nameCell));
 
             m_table->setItem(rowIndex, 1,
                              textCell(customer.phone().isEmpty() ? QStringLiteral("—")
                                                                  : customer.phone()));
             m_table->setItem(rowIndex, 2,
-                             textCell(customer.email().isEmpty() ? QStringLiteral("—")
-                                                                 : customer.email()));
+                             withTooltip(textCell(customer.email().isEmpty()
+                                                      ? QStringLiteral("—")
+                                                      : customer.email())));
 
             auto* visitsCell = numberCell(QString::number(customer.visits()), customer.visits());
             m_table->setItem(rowIndex, 3, visitsCell);
@@ -553,6 +668,11 @@ void CustomersPage::refresh() {
                     break;
                 }
             }
+        } else if (!property("aluchopPrimed").toBool() && m_table->rowCount() > 0) {
+            // First time this screen is filled, open on the first guest: the profile panel then
+            // shows a real visit count and a real points balance instead of two dashes.
+            setProperty("aluchopPrimed", true);
+            m_table->selectRow(0);
         }
 
         // Header subtitle: a quiet running total.
@@ -770,23 +890,22 @@ void CustomersPage::onShowHistory() {
     auto* visitsChip = findChild<QLabel*>(QStringLiteral("customerVisitsChip"));
     auto* pointsChip = findChild<QLabel*>(QStringLiteral("customerPointsChip"));
     auto* historyStack = findChild<QStackedWidget*>(QStringLiteral("customersHistoryStack"));
+    auto* historyCount = findChild<QLabel*>(QStringLiteral("customerHistoryCount"));
 
     if (id == 0) {
+        if (historyCount) historyCount->setText(QString());
         if (nameLabel) nameLabel->setText(QStringLiteral("No guest selected"));
         if (contactLabel) {
             contactLabel->setText(
                 QStringLiteral("Pick somebody from the directory to see their history."));
         }
-        if (visitsChip) {
-            visitsChip->setText(QStringLiteral("— visits"));
-            styleChip(visitsChip, p.textMuted);
-        }
-        if (pointsChip) {
-            pointsChip->setText(QStringLiteral("— points"));
-            styleChip(pointsChip, p.textMuted);
-        }
+        // No guest is selected, so there is no visit count and no points balance to state. A
+        // dash in the shape of a number would be a lie about the database — the chips are hidden
+        // instead, and the panel says plainly that nothing is selected.
+        if (visitsChip) visitsChip->setVisible(false);
+        if (pointsChip) pointsChip->setVisible(false);
         if (m_favourites) {
-            m_favourites->setText(QStringLiteral("—"));
+            m_favourites->setText(QStringLiteral("Nothing to show until a guest is selected"));
             m_favourites->setStyleSheet(QStringLiteral("color: %1;").arg(p.textMuted.name()));
         }
         beginRepopulate(m_history);
@@ -818,13 +937,19 @@ void CustomersPage::onShowHistory() {
                                                   : parts.join(QStringLiteral("  ·  ")));
         }
         if (visitsChip) {
+            visitsChip->setVisible(true);
             visitsChip->setText(QStringLiteral("%1 visit%2")
                                     .arg(customer->visits())
                                     .arg(customer->visits() == 1 ? QString()
                                                                  : QStringLiteral("s")));
-            styleChip(visitsChip, p.secondary);
+            visitsChip->setToolTip(
+                QStringLiteral("Lifetime visit counter — the value models::Customer::operator++ "
+                               "advances every time a bill is settled for %1.")
+                    .arg(customer->name()));
+            styleChip(visitsChip, customer->visits() > 0 ? p.secondary : p.textMuted);
         }
         if (pointsChip) {
+            pointsChip->setVisible(true);
             pointsChip->setText(QStringLiteral("%1 points").arg(customer->loyaltyPoints()));
             styleChip(pointsChip, customer->loyaltyPoints() > 0 ? p.success : p.textMuted);
         }
@@ -849,14 +974,16 @@ void CustomersPage::onShowHistory() {
         int rowIndex = 0;
         for (const models::Order& order : history) {
             m_history->insertRow(rowIndex);
-            m_history->setItem(
-                rowIndex, 0,
-                textCell(order.createdAt().toLocalTime().toString(
-                    QStringLiteral("dd MMM yyyy · HH:mm"))));
+            // The clock time is the least meaningful thing in the row, so it rides on the tooltip
+            // and the width it was taking goes to the dish names instead.
+            const QDateTime when = order.createdAt().toLocalTime();
+            auto* dateCell = textCell(when.toString(QStringLiteral("dd MMM yyyy")));
+            dateCell->setToolTip(when.toString(QStringLiteral("dddd dd MMMM yyyy 'at' HH:mm")));
+            m_history->setItem(rowIndex, 0, dateCell);
             m_history->setItem(rowIndex, 1,
-                               textCell(order.orderNumber().isEmpty()
-                                            ? QStringLiteral("—")
-                                            : order.orderNumber()));
+                               withTooltip(textCell(order.orderNumber().isEmpty()
+                                                        ? QStringLiteral("—")
+                                                        : order.orderNumber())));
 
             QStringList dishes;
             int units = 0;
@@ -887,12 +1014,41 @@ void CustomersPage::onShowHistory() {
             ++rowIndex;
         }
 
+        // One reconciliation, two widgets. `visits` is the lifetime counter on the customer row;
+        // `itemised` is how many of those visits still have their order lines in this database.
+        // Every sentence below is derived from those two numbers, so the caption, the chip and the
+        // empty state cannot disagree about the same guest again.
+        const int visits = customer->visits();
+        const int itemised = static_cast<int>(history.size());
+        if (historyCount) {
+            historyCount->setText(
+                visits == 0 ? QStringLiteral("no visits on record")
+                            : QStringLiteral("%1 of %2 itemised").arg(itemised).arg(visits));
+            historyCount->setToolTip(
+                QStringLiteral("%1 has %2 recorded visit(s). %3 of them still have their order "
+                               "lines stored, and those are the ones listed here.")
+                    .arg(customer->name())
+                    .arg(visits)
+                    .arg(itemised));
+        }
+
         if (historyStack) {
             historyStack->setCurrentIndex(history.empty() ? 1 : 0);
             if (auto* empty = dynamic_cast<EmptyState*>(historyStack->widget(1))) {
-                empty->setText(QStringLiteral("No visits yet"),
-                               QStringLiteral("%1 has not been served here so far.")
-                                   .arg(customer->name()));
+                if (visits > 0) {
+                    empty->setText(
+                        QStringLiteral("%1 visit%2, none itemised")
+                            .arg(visits)
+                            .arg(visits == 1 ? QString() : QStringLiteral("s")),
+                        QStringLiteral("%1's visit counter and loyalty balance were carried over "
+                                       "when the book was opened, so there are no order lines to "
+                                       "list yet. The next settled bill appears here.")
+                            .arg(customer->name()));
+                } else {
+                    empty->setText(QStringLiteral("No visits yet"),
+                                   QStringLiteral("%1 has not been served here so far.")
+                                       .arg(customer->name()));
+                }
             }
         }
     } catch (const std::exception& e) {

@@ -18,11 +18,14 @@
 #include "aluchop/gui/ReservationsPage.hpp"
 
 #include <algorithm>
+#include <initializer_list>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <QAbstractAnimation>
 #include <QAbstractItemView>
+#include <QAbstractSpinBox>
 #include <QComboBox>
 #include <QDate>
 #include <QDateEdit>
@@ -32,8 +35,11 @@
 #include <QEasingCurve>
 #include <QEvent>
 #include <QFont>
+#include <QFontMetrics>
 #include <QFormLayout>
+#include <QFrame>
 #include <QGraphicsOpacityEffect>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHash>
 #include <QHeaderView>
@@ -76,7 +82,18 @@ constexpr int kPageSpacing = 18;
 constexpr int kPanelPad = 18;
 constexpr int kControlH = 38;
 constexpr int kFadeMs = 220;
+constexpr int kRowH = 44;  ///< ElegantTable's row height — panels are sized in whole rows
 constexpr int kDefaultSittingMin = 90;  ///< the house sitting, matching Reservation's own default
+
+// --- booking sheet columns --------------------------------------------------------------------
+constexpr int kColTime = 0;
+constexpr int kColGuest = 1;
+constexpr int kColGuests = 2;
+constexpr int kColTable = 3;
+constexpr int kColStatus = 4;
+constexpr int kColRequest = 5;
+/// The guest's name and number is the identity of the row and never yields below this.
+constexpr int kGuestColFloor = 190;
 
 /// @return the live palette; every colour on this screen is read from here, never literal hex.
 const Palette& theme() { return ThemeManager::instance().palette(); }
@@ -196,6 +213,251 @@ private:
     bool m_played = false;
 };
 
+/// @brief Gives a table a column policy that cannot starve its identity column.
+///
+/// `ElegantTable` turns on `stretchLastSection`, which lets the last column swallow the spare
+/// width while an earlier `Stretch` column is squeezed to the header's minimum. Columns whose
+/// text is bounded (a time, a party size, a status word) size to their content; the free-text
+/// columns share what is left; nothing may shrink below @p minSection.
+///
+/// @param table          the table to configure.
+/// @param stretchColumns the free-text columns that absorb the spare width.
+/// @param minSection     narrowest any column may become, in pixels.
+void configureColumns(QTableWidget* table, std::initializer_list<int> stretchColumns,
+                      int minSection = 76) {
+    QHeaderView* head = table->horizontalHeader();
+    head->setStretchLastSection(false);
+    head->setMinimumSectionSize(minSection);
+    for (int column = 0; column < table->columnCount(); ++column) {
+        const bool stretch =
+            std::find(stretchColumns.begin(), stretchColumns.end(), column) !=
+            stretchColumns.end();
+        head->setSectionResizeMode(column, stretch ? QHeaderView::Stretch
+                                                   : QHeaderView::ResizeToContents);
+    }
+    table->setTextElideMode(Qt::ElideRight);
+    table->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+}
+
+/// @brief Sizes a free-text column to the text it is actually holding, within bounds.
+///
+/// Two `Stretch` columns split the spare width evenly, which is only right when both hold the
+/// same kind of text. Here they do not: the guest is who the row *is* — name and phone — while
+/// the special request is a footnote. Measuring the footnote and capping it leaves the identity
+/// column everything else, and lets it grow with the window.
+///
+/// @param table the sheet.
+/// @param column the column to size.
+/// @param minimum narrowest it may become.
+/// @param maximum widest it may grow before the identity column starts paying for it.
+void fitColumn(QTableWidget* table, int column, int minimum, int maximum) {
+    const int viewport = table->viewport()->width();
+    if (viewport < 120) return;  // not laid out yet; refresh() will come back
+
+    const QFontMetrics metrics(table->font());
+    int widest = 0;
+    for (int row = 0; row < table->rowCount(); ++row) {
+        if (const QTableWidgetItem* cell = table->item(row, column)) {
+            widest = std::max(widest, metrics.horizontalAdvance(cell->text()));
+        }
+    }
+    const QTableWidgetItem* caption = table->horizontalHeaderItem(column);
+    const int header = caption ? metrics.horizontalAdvance(caption->text()) + 16 : 0;
+    int wanted = std::clamp(std::max(widest + 26, header), minimum, maximum);
+
+    // Measured against the live header, not against an assumption: on a narrow window the fixed
+    // columns take more of the sheet, and a footnote column sized in a vacuum would starve the
+    // guest column and hang a horizontal scroll bar under the sheet.
+    int fixed = 0;
+    for (int other = 0; other < table->columnCount(); ++other) {
+        if (other != column && other != kColGuest) fixed += table->columnWidth(other);
+    }
+    const int shared = viewport - fixed;
+    if (shared - wanted < kGuestColFloor) wanted = std::max(minimum, shared - kGuestColFloor);
+    table->horizontalHeader()->resizeSection(column, wanted);
+}
+
+/// @brief Re-runs the sheet's column fit whenever the sheet itself is resized.
+///
+/// @oop-concept Method Overriding :: QObject::eventFilter is overridden to react to another
+///              widget's resize without subclassing that widget
+class ColumnFitter : public QObject {
+public:
+    /// @param table the table to keep fitted; also the Qt parent.
+    /// @param column the measured column.
+    /// @param minimum narrowest that column may become.
+    /// @param maximum widest that column may grow.
+    ColumnFitter(QTableWidget* table, int column, int minimum, int maximum)
+        : QObject(table), m_table(table), m_column(column), m_min(minimum), m_max(maximum) {
+        table->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (watched == m_table &&
+            (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
+            fitColumn(m_table, m_column, m_min, m_max);
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    QTableWidget* m_table;
+    int m_column;
+    int m_min;
+    int m_max;
+};
+
+/// @brief Makes a form field fill its column like every other field on the screen.
+///
+/// QLineEdit and QComboBox grow with the form; QAbstractSpinBox does not (its policy is
+/// Minimum/Fixed), which is why the time, duration and party fields used to sit at three
+/// different widths and read as unstyled stock controls next to the rest of the form.
+void matchFormField(QAbstractSpinBox* field) {
+    field->setMinimumHeight(kControlH);
+    field->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    field->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    field->setAccelerated(true);
+}
+
+/// @brief Keeps a destructive action red even when it is unavailable.
+///
+/// The shared sheet paints `#dangerButton:disabled` in the neutral border sage, which on this
+/// screen — where "Cancel booking" is disabled until a live booking is selected — made the one
+/// destructive action look like an ordinary green one. A muted red says both things at once:
+/// this is destructive, and right now it is not available.
+void styleDestructive(QPushButton* button) {
+    const QColor d = theme().danger;
+    button->setStyleSheet(QStringLiteral("QPushButton:disabled {"
+                                         " background-color: rgba(%1,%2,%3,12%);"
+                                         " border: 1px solid rgba(%1,%2,%3,38%);"
+                                         " color: rgba(%1,%2,%3,60%); }")
+                              .arg(d.red())
+                              .arg(d.green())
+                              .arg(d.blue()));
+}
+
+/// @brief The state one table is in for the window the booking form is currently asking about.
+/// @oop-concept Enumerations :: the floor plan has a closed vocabulary of conditions
+enum class TableState {
+    Free,      ///< active, big enough and holding nothing in this window
+    Held,      ///< a live booking overlaps the window
+    TooSmall,  ///< free, but it cannot seat the party being typed in
+    OffPlan    ///< withdrawn from service
+};
+
+/// @return the palette colour that carries @p state — never a literal hex value.
+QColor tableColour(TableState state) {
+    const Palette& p = theme();
+    switch (state) {
+        case TableState::Free:
+            return p.success;
+        case TableState::Held:
+            return p.danger;
+        case TableState::TooSmall:
+        case TableState::OffPlan:
+            break;
+    }
+    return p.textMuted;
+}
+
+/// @brief One tile of the floor plan: a table, how many it seats and what is happening to it.
+///
+/// Built fresh on every refresh() rather than kept and mutated — twelve tiny frames cost
+/// nothing to rebuild, and a floor plan that is rebuilt from the service's answer can never
+/// drift out of step with the availability line printed under the booking form.
+///
+/// @param name the table's name, e.g. "T4".
+/// @param capacity how many it seats.
+/// @param state what is happening to it in the window being asked about.
+/// @param note the second line, e.g. "Held · 19:00".
+/// @param detail the tooltip — the whole story, including who is holding it.
+/// @param parent owning widget.
+QFrame* makeTableTile(const QString& name, int capacity, TableState state, const QString& note,
+                      const QString& detail, QWidget* parent) {
+    const Palette& p = theme();
+    const QColor accentColour = tableColour(state);
+
+    auto* tile = new QFrame(parent);
+    tile->setFrameShape(QFrame::NoFrame);
+    tile->setToolTip(detail);
+    tile->setStyleSheet(QStringLiteral("QFrame { background-color: rgba(%1,%2,%3,%4);"
+                                       " border: 1px solid rgba(%1,%2,%3,%5);"
+                                       " border-radius: 10px; }")
+                            .arg(accentColour.red())
+                            .arg(accentColour.green())
+                            .arg(accentColour.blue())
+                            .arg(state == TableState::Free ? 16 : 12)
+                            .arg(state == TableState::OffPlan ? 30 : 55));
+
+    auto* column = new QVBoxLayout(tile);
+    column->setContentsMargins(10, 7, 10, 7);
+    column->setSpacing(1);
+
+    auto* heading = new QLabel(QStringLiteral("%1  ·  seats %2").arg(name).arg(capacity), tile);
+    QFont headingFont = heading->font();
+    headingFont.setPointSize(11);
+    headingFont.setWeight(QFont::DemiBold);
+    heading->setFont(headingFont);
+    heading->setStyleSheet(QStringLiteral("background: transparent; border: none; color: %1;")
+                               .arg(p.text.name()));
+
+    auto* status = new QLabel(note, tile);
+    QFont statusFont = status->font();
+    statusFont.setPointSize(10);
+    statusFont.setWeight(QFont::DemiBold);
+    status->setFont(statusFont);
+    status->setStyleSheet(QStringLiteral("background: transparent; border: none; color: %1;")
+                              .arg(accentColour.name()));
+
+    column->addWidget(heading);
+    column->addWidget(status);
+    return tile;
+}
+
+/// @brief Keeps a table an exact number of whole rows tall.
+///
+/// A panel hands its table whatever height is left over, which is almost never a whole multiple
+/// of the row height — so the bottom row was drawn sliced through the middle. Capping the table
+/// at `header + n · rowHeight` turns those leftover pixels into bottom padding inside the card,
+/// which reads as deliberate space instead of a clipped row. The height is measured from the
+/// container the layout actually resizes, never from the (capped) table, so the table still grows
+/// when the window does.
+///
+/// @oop-concept Method Overriding :: QObject::eventFilter is overridden to react to another
+///              widget's resize without subclassing that widget
+class WholeRowFitter : public QObject {
+public:
+    /// @param table the table to snap.
+    /// @param container the widget the layout resizes (the table's stack); also the Qt parent.
+    WholeRowFitter(QTableWidget* table, QWidget* container)
+        : QObject(container), m_table(table), m_container(container) {
+        container->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (watched == m_container &&
+            (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
+            snap();
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    void snap() {
+        const int rowH = m_table->verticalHeader()->defaultSectionSize();
+        const int headH = m_table->horizontalHeader()->sizeHint().height();
+        const int available = m_container->height() - headH;
+        if (rowH <= 0 || available < rowH) return;
+        const int target = headH + (available / rowH) * rowH;
+        if (m_table->maximumHeight() != target) m_table->setMaximumHeight(target);
+    }
+
+    QTableWidget* m_table;
+    QWidget* m_container;
+};
+
 void beginRepopulate(QTableWidget* table) {
     table->setSortingEnabled(false);
     table->clearContents();
@@ -313,6 +575,7 @@ ReservationsPage::ReservationsPage(services::AppContext& ctx, QWidget* parent)
     completeBtn->setProperty("aluchopRole", QStringLiteral("resComplete"));
     editBtn->setProperty("aluchopRole", QStringLiteral("resEdit"));
     cancelBtn->setProperty("aluchopRole", QStringLiteral("resCancel"));
+    styleDestructive(cancelBtn);
     header->addWidget(seatBtn);
     header->addWidget(completeBtn);
     header->addWidget(editBtn);
@@ -355,7 +618,10 @@ ReservationsPage::ReservationsPage(services::AppContext& ctx, QWidget* parent)
     auto* body = new QHBoxLayout;
     body->setSpacing(kPageSpacing);
 
-    // Booking sheet ---------------------------------------------------------------------------
+    // Left column: the day's sheet, and under it the floor it is booking ----------------------
+    auto* leftColumn = new QVBoxLayout;
+    leftColumn->setSpacing(kPageSpacing);
+
     auto* sheetPanel = new GlassPanel(this);
     auto* sheetCol = new QVBoxLayout(sheetPanel);
     sheetCol->setContentsMargins(kPanelPad, kPanelPad, kPanelPad, kPanelPad);
@@ -367,27 +633,82 @@ ReservationsPage::ReservationsPage(services::AppContext& ctx, QWidget* parent)
     m_list = new ElegantTable(
         QStringList{QStringLiteral("Time"), QStringLiteral("Guest"), QStringLiteral("Guests"),
                     QStringLiteral("Table"), QStringLiteral("Status"),
-                    QStringLiteral("Special request")},
+                    QStringLiteral("Request")},
         sheetPanel);
-    m_list->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    m_list->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    m_list->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    m_list->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    m_list->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-    m_list->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Stretch);
+    // Guest is the identity of the row and takes the spare width; the special request is
+    // measured and capped (see fitColumn) so it can never squeeze a name and phone into an
+    // ellipsis.
+    configureColumns(m_list, {kColGuest});
+    m_list->horizontalHeader()->setSectionResizeMode(kColRequest, QHeaderView::Interactive);
     m_list->setMinimumWidth(520);
+    // A booking sheet reads down the day: earliest sitting first, not last.
+    m_list->sortByColumn(kColTime, Qt::AscendingOrder);
+    new ColumnFitter(m_list, kColRequest, 110, 140);
 
     auto* sheetEmpty = new EmptyState(QStringLiteral("No bookings for this day"),
                                       QStringLiteral("Take one on the right — the table picker "
                                                      "only offers tables that are genuinely "
                                                      "free."),
                                       sheetPanel);
+    QPushButton* emptyBook = sheetEmpty->enableAction(QStringLiteral("Take the first booking"));
+    sheetEmpty->setMaximumWidth(440);
+
+    // A stacked page fills whatever it is given, which turned "no bookings today" into a dashed
+    // rectangle the height of the whole card. Centred inside a plain page it stays the size of
+    // the sentence it is actually saying.
+    auto* sheetEmptyPage = new QWidget(sheetPanel);
+    auto* sheetEmptyCol = new QVBoxLayout(sheetEmptyPage);
+    sheetEmptyCol->setContentsMargins(0, 0, 0, 0);
+    sheetEmptyCol->addStretch(1);
+    sheetEmptyCol->addWidget(sheetEmpty, 0, Qt::AlignHCenter);
+    sheetEmptyCol->addStretch(1);
+
     auto* sheetStack = new QStackedWidget(sheetPanel);
     sheetStack->setObjectName(QStringLiteral("reservationSheetStack"));
     sheetStack->addWidget(m_list);
-    sheetStack->addWidget(sheetEmpty);
+    sheetStack->addWidget(sheetEmptyPage);
+    sheetStack->setMinimumHeight(4 * kRowH);  // whole rows, never a sheet sliced through one
+    new WholeRowFitter(m_list, sheetStack);
     sheetCol->addWidget(sheetStack, 1);
-    body->addWidget(sheetPanel, 3);
+    leftColumn->addWidget(sheetPanel, 1);
+
+    // Floor plan -------------------------------------------------------------------------------
+    // The sheet used to have this space, and on a quiet day it spent it on a dashed rectangle the
+    // height of a door. The floor plan answers the question the sheet cannot — *which* tables are
+    // free right now — and it is drawn from the same service call as the availability line under
+    // the form, so the two can never disagree.
+    auto* floorPanel = new GlassPanel(this);
+    auto* floorCol = new QVBoxLayout(floorPanel);
+    floorCol->setContentsMargins(kPanelPad, kPanelPad, kPanelPad, kPanelPad);
+    floorCol->setSpacing(10);
+
+    auto* floorHead = new QHBoxLayout;
+    floorHead->setSpacing(8);
+    floorHead->addWidget(makeLabel(QStringLiteral("Floor plan"), QStringLiteral("sectionTitle"),
+                                   floorPanel, 13, QFont::DemiBold));
+    auto* floorNote = makeLabel(QString(), QStringLiteral("mutedLabel"), floorPanel, 11);
+    floorNote->setObjectName(QStringLiteral("reservationFloorNote"));
+    floorHead->addWidget(floorNote);
+    floorHead->addStretch(1);
+    // A three-word key, so the colour of a tile is never something the reader has to guess.
+    for (const auto& key : {std::make_pair(QStringLiteral("Free"), TableState::Free),
+                            std::make_pair(QStringLiteral("Held"), TableState::Held),
+                            std::make_pair(QStringLiteral("Off plan"), TableState::OffPlan)}) {
+        auto* legend = makeLabel(QStringLiteral("●  %1").arg(key.first), QString(), floorPanel, 10);
+        legend->setProperty("aluchopLegend", static_cast<int>(key.second));
+        floorHead->addWidget(legend);
+    }
+    floorCol->addLayout(floorHead);
+
+    auto* floorGrid = new QWidget(floorPanel);
+    floorGrid->setObjectName(QStringLiteral("reservationFloorPlan"));
+    auto* tiles = new QGridLayout(floorGrid);
+    tiles->setContentsMargins(0, 0, 0, 0);
+    tiles->setHorizontalSpacing(8);
+    tiles->setVerticalSpacing(8);
+    floorCol->addWidget(floorGrid);
+    leftColumn->addWidget(floorPanel, 0);
+    body->addLayout(leftColumn, 3);
 
     // New-booking panel -------------------------------------------------------------------------
     auto* formPanel = new GlassPanel(this);
@@ -397,9 +718,11 @@ ReservationsPage::ReservationsPage(services::AppContext& ctx, QWidget* parent)
     formCol->setSpacing(12);
     formCol->addWidget(makeLabel(QStringLiteral("Take a booking"), QStringLiteral("sectionTitle"),
                                  formPanel, 13, QFont::DemiBold));
-    formCol->addWidget(makeLabel(QStringLiteral("Availability updates as you type — the picker "
-                                                "never shows a table that is already held."),
-                                 QStringLiteral("mutedLabel"), formPanel, 11));
+    auto* formBlurb = makeLabel(QStringLiteral("Availability updates as you type — the picker "
+                                               "never shows a table that is already held."),
+                                QStringLiteral("mutedLabel"), formPanel, 11);
+    formBlurb->setWordWrap(true);  // the panel is one column wide: wrap rather than clip mid-word
+    formCol->addWidget(formBlurb);
 
     auto* form = new QFormLayout;
     form->setSpacing(10);
@@ -418,7 +741,7 @@ ReservationsPage::ReservationsPage(services::AppContext& ctx, QWidget* parent)
     auto* startTime = new QTimeEdit(QTime(19, 0), formPanel);
     startTime->setObjectName(QStringLiteral("resStartTime"));
     startTime->setDisplayFormat(QStringLiteral("HH:mm"));
-    startTime->setMinimumHeight(kControlH);
+    matchFormField(startTime);
 
     auto* duration = new QSpinBox(formPanel);
     duration->setObjectName(QStringLiteral("resDuration"));
@@ -426,16 +749,21 @@ ReservationsPage::ReservationsPage(services::AppContext& ctx, QWidget* parent)
     duration->setSingleStep(15);
     duration->setValue(kDefaultSittingMin);
     duration->setSuffix(QStringLiteral(" min"));
+    matchFormField(duration);
 
     auto* guests = new QSpinBox(formPanel);
     guests->setObjectName(QStringLiteral("resGuests"));
     guests->setRange(1, 40);
     guests->setValue(2);
     guests->setSuffix(QStringLiteral(" guests"));
+    matchFormField(guests);
 
     m_tablePicker = new QComboBox(formPanel);
     m_tablePicker->setObjectName(QStringLiteral("resTablePicker"));
     m_tablePicker->setMinimumHeight(kControlH);
+    // Fill the field column like every other row of the form: a combo box sizes to its longest
+    // entry by default, which left one short control in a column of full-width ones.
+    m_tablePicker->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     auto* request = new QLineEdit(formPanel);
     request->setObjectName(QStringLiteral("resRequest"));
@@ -457,12 +785,14 @@ ReservationsPage::ReservationsPage(services::AppContext& ctx, QWidget* parent)
     recognised->setVisible(false);
     formCol->addWidget(recognised);
 
+    // The verdict belongs with the button it is a verdict about: form above, answer and action
+    // pinned together at the foot of the card, with the breathing room between them.
+    formCol->addStretch(1);
+
     auto* availability = makeLabel(QString(), QString(), formPanel, 11);
     availability->setObjectName(QStringLiteral("resAvailability"));
     availability->setWordWrap(true);
     formCol->addWidget(availability);
-
-    formCol->addStretch(1);
 
     auto* bookBtn = makeButton(QStringLiteral("Book the table"), QStringLiteral("primaryButton"),
                                formPanel);
@@ -494,6 +824,7 @@ ReservationsPage::ReservationsPage(services::AppContext& ctx, QWidget* parent)
     connect(guests, &QSpinBox::valueChanged, this, [reask](int) { reask(); });
     connect(guestPhone, &QLineEdit::textChanged, this, [reask](const QString&) { reask(); });
 
+    connect(emptyBook, &QPushButton::clicked, this, [guestName]() { guestName->setFocus(); });
     connect(bookBtn, &QPushButton::clicked, this, &ReservationsPage::onBook);
     connect(editBtn, &QPushButton::clicked, this, &ReservationsPage::onEdit);
     connect(m_list, &QTableWidget::itemDoubleClicked, this,
@@ -558,19 +889,20 @@ void ReservationsPage::refresh() {
             QFont timeFont = timeCell->font();
             timeFont.setWeight(QFont::DemiBold);
             timeCell->setFont(timeFont);
-            m_list->setItem(rowIndex, 0, timeCell);
+            m_list->setItem(rowIndex, kColTime, timeCell);
 
             QString guestText = booking.customerName();
             if (!booking.phone().isEmpty()) {
-                guestText += QStringLiteral("  ·  %1").arg(booking.phone());
+                guestText += QStringLiteral(" · %1").arg(booking.phone());
             }
             auto* guestCell = textCell(guestText);
-            if (booking.customerId() != 0) {
-                guestCell->setToolTip(QStringLiteral("Linked to a loyalty customer."));
-            }
-            m_list->setItem(rowIndex, 1, guestCell);
+            guestCell->setToolTip(booking.customerId() != 0
+                                      ? QStringLiteral("%1\nLinked to a loyalty customer.")
+                                            .arg(guestText)
+                                      : guestText);
+            m_list->setItem(rowIndex, kColGuest, guestCell);
 
-            m_list->setItem(rowIndex, 2,
+            m_list->setItem(rowIndex, kColGuests,
                             numberCell(QString::number(booking.guests()), booking.guests()));
 
             const QString tableName = tableNames.value(booking.tableId());
@@ -582,20 +914,26 @@ void ReservationsPage::refresh() {
             if (capacity > 0) {
                 tableCell->setToolTip(QStringLiteral("Seats %1").arg(capacity));
             }
-            m_list->setItem(rowIndex, 3, tableCell);
+            m_list->setItem(rowIndex, kColTable, tableCell);
 
             auto* statusCell = textCell(statusLabel(booking.status()));
             statusCell->setForeground(statusColour(booking.status()));
             QFont statusFont = statusCell->font();
             statusFont.setWeight(QFont::DemiBold);
             statusCell->setFont(statusFont);
-            m_list->setItem(rowIndex, 4, statusCell);
+            m_list->setItem(rowIndex, kColStatus, statusCell);
 
             auto* requestCell = textCell(booking.specialRequest().isEmpty()
                                              ? QStringLiteral("—")
                                              : booking.specialRequest());
-            if (booking.specialRequest().isEmpty()) requestCell->setForeground(p.textMuted);
-            m_list->setItem(rowIndex, 5, requestCell);
+            if (booking.specialRequest().isEmpty()) {
+                requestCell->setForeground(p.textMuted);
+            } else {
+                // This column yields its width to the guest's name and number, so whatever does
+                // not fit is one hover away rather than lost.
+                requestCell->setToolTip(booking.specialRequest());
+            }
+            m_list->setItem(rowIndex, kColRequest, requestCell);
 
             if (blocksTable(booking.status())) {
                 covers += booking.guests();
@@ -603,17 +941,21 @@ void ReservationsPage::refresh() {
             } else {
                 for (int column = 0; column < m_list->columnCount(); ++column) {
                     if (QTableWidgetItem* cell = m_list->item(rowIndex, column)) {
-                        if (column != 4) cell->setForeground(p.textMuted);
+                        if (column != kColStatus) cell->setForeground(p.textMuted);
                     }
                 }
             }
             ++rowIndex;
         }
         endRepopulate(m_list);
+        fitColumn(m_list, kColRequest, 110, 140);
 
         if (auto* stack = findChild<QStackedWidget*>(QStringLiteral("reservationSheetStack"))) {
             stack->setCurrentIndex(rowIndex == 0 ? 1 : 0);
-            if (auto* empty = dynamic_cast<EmptyState*>(stack->widget(1))) {
+            // EmptyState is deliberately meta-object-free, so it is found by its style objectName
+            // and then downcast rather than by findChild<EmptyState*>.
+            if (auto* empty = dynamic_cast<EmptyState*>(
+                    stack->widget(1)->findChild<QFrame*>(QStringLiteral("emptyState")))) {
                 empty->setText(QStringLiteral("No bookings on %1")
                                    .arg(day.toString(QStringLiteral("dddd dd MMM"))),
                                QStringLiteral("Take one on the right — the table picker only "
@@ -623,7 +965,7 @@ void ReservationsPage::refresh() {
 
         if (previousId != 0) {
             for (int row = 0; row < m_list->rowCount(); ++row) {
-                const QTableWidgetItem* cell = m_list->item(row, 0);
+                const QTableWidgetItem* cell = m_list->item(row, kColTime);
                 if (cell && cell->data(Qt::UserRole).toInt() == previousId) {
                     m_list->selectRow(row);
                     break;
@@ -652,6 +994,7 @@ void ReservationsPage::refresh() {
                                    selectedStatus == models::ReservationStatus::Seated);
             } else if (role == QLatin1String("resCancel")) {
                 button->setEnabled(hasSelection && blocksTable(selectedStatus));
+                styleDestructive(button);  // re-read the palette: Light/Dark switch live
             } else if (role == QLatin1String("resEdit")) {
                 button->setEnabled(hasSelection && blocksTable(selectedStatus));
             }
@@ -737,6 +1080,85 @@ void ReservationsPage::refresh() {
                         .arg(minutes));
                 availability->setStyleSheet(QStringLiteral("color: %1;").arg(p.textMuted.name()));
             }
+
+            // --- the floor plan for exactly that window ------------------------------------------
+            // Same call, same answer: a tile is Free if and only if the service offered its table
+            // in the picker, so the tiles, the picker and the "N free now" chip always agree.
+            if (auto* plan = findChild<QWidget*>(QStringLiteral("reservationFloorPlan"))) {
+                QSet<int> freeIds;
+                for (const models::Table& table : free) freeIds.insert(table.id());
+
+                auto* grid = qobject_cast<QGridLayout*>(plan->layout());
+                if (grid) {
+                    while (QLayoutItem* old = grid->takeAt(0)) {
+                        delete old->widget();
+                        delete old;
+                    }
+                    // Two rows of tiles, however many tables the plan holds — wide enough to read,
+                    // never tall enough to start eating the booking sheet above it.
+                    const int count = static_cast<int>(allTables.size());
+                    const int columns = std::clamp((count + 1) / 2, 4, 8);
+                    int cell = 0;
+                    for (const models::Table& table : allTables) {
+                        TableState state = TableState::Free;
+                        QString note = QStringLiteral("Free");
+                        QString detail = QStringLiteral("%1 seats %2 — free for this window.")
+                                             .arg(table.name())
+                                             .arg(table.capacity());
+
+                        if (!table.isActive()) {
+                            state = TableState::OffPlan;
+                            note = QStringLiteral("Off plan");
+                            detail = QStringLiteral("%1 is withdrawn from service.")
+                                         .arg(table.name());
+                        } else if (!freeIds.contains(table.id())) {
+                            const models::Reservation* holder = nullptr;
+                            for (const models::Reservation& booking : bookings) {
+                                if (booking.tableId() != table.id()) continue;
+                                if (!blocksTable(booking.status())) continue;
+                                if (!booking.overlaps(start, minutes)) continue;
+                                holder = &booking;
+                                break;
+                            }
+                            if (holder) {
+                                const QString from = holder->startsAt().toLocalTime().time()
+                                                         .toString(QStringLiteral("HH:mm"));
+                                const QString until = holder->endsAt().toLocalTime().time()
+                                                          .toString(QStringLiteral("HH:mm"));
+                                state = TableState::Held;
+                                note = QStringLiteral("Held · %1").arg(from);
+                                detail = QStringLiteral("%1 seats %2 — held %3–%4 by %5.")
+                                             .arg(table.name())
+                                             .arg(table.capacity())
+                                             .arg(from, until, holder->customerName());
+                            } else {
+                                state = TableState::TooSmall;
+                                note = QStringLiteral("Seats %1").arg(table.capacity());
+                                detail = QStringLiteral("%1 seats %2 — too small for a party of "
+                                                        "%3.")
+                                             .arg(table.name())
+                                             .arg(table.capacity())
+                                             .arg(partySize);
+                            }
+                        }
+
+                        grid->addWidget(makeTableTile(table.name(), table.capacity(), state, note,
+                                                      detail, plan),
+                                        cell / columns, cell % columns);
+                        ++cell;
+                    }
+                    for (int column = 0; column < columns; ++column) {
+                        grid->setColumnStretch(column, 1);
+                    }
+                }
+            }
+            if (auto* note = findChild<QLabel*>(QStringLiteral("reservationFloorNote"))) {
+                note->setText(QStringLiteral("·  for %1 guest%2 from %3, %4 min")
+                                  .arg(partySize)
+                                  .arg(partySize == 1 ? QString() : QStringLiteral("s"))
+                                  .arg(startTime->time().toString(QStringLiteral("HH:mm")))
+                                  .arg(minutes));
+            }
         }
 
         for (QPushButton* button : findChildren<QPushButton*>()) {
@@ -776,6 +1198,13 @@ void ReservationsPage::refresh() {
             styleChip(chip, freeNow > 0 ? p.success : p.danger);
         }
         for (QLabel* label : findChildren<QLabel*>()) {
+            // The floor-plan key is repainted from the live palette, so it follows a theme switch.
+            const QVariant legend = label->property("aluchopLegend");
+            if (legend.isValid()) {
+                label->setStyleSheet(
+                    QStringLiteral("color: %1;")
+                        .arg(tableColour(static_cast<TableState>(legend.toInt())).name()));
+            }
             if (label->property("aluchopRole").toString() ==
                 QLatin1String("reservationsSubtitle")) {
                 label->setText(QStringLiteral("%1 booking%2 on the sheet  ·  %3 still holding a "

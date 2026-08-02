@@ -19,12 +19,15 @@
 #include "aluchop/gui/EmployeesPage.hpp"
 
 #include <algorithm>
+#include <initializer_list>
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <vector>
 
 #include <QAbstractAnimation>
 #include <QAbstractItemView>
+#include <QByteArray>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDate>
@@ -64,10 +67,14 @@
 #include "aluchop/core/Money.hpp"
 #include "aluchop/gui/ThemeManager.hpp"
 #include "aluchop/gui/Widgets.hpp"
+#include "aluchop/models/Admin.hpp"
+#include "aluchop/models/Chef.hpp"
 #include "aluchop/models/Customer.hpp"
 #include "aluchop/models/Employee.hpp"
 #include "aluchop/models/Enums.hpp"
+#include "aluchop/models/Manager.hpp"
 #include "aluchop/models/StaffCustomer.hpp"
+#include "aluchop/models/Waiter.hpp"
 #include "aluchop/services/AppContext.hpp"
 
 namespace aluchop::gui {
@@ -81,6 +88,24 @@ constexpr int kPageSpacing = 18;
 constexpr int kPanelPad = 18;
 constexpr int kControlH = 38;
 constexpr int kFadeMs = 220;
+constexpr int kRowH = 44;  ///< ElegantTable's row height — panels are sized in whole rows
+
+// --- staff table columns ---------------------------------------------------------------------
+constexpr int kStaffName = 0;
+constexpr int kStaffRole = 1;
+constexpr int kStaffShift = 2;
+constexpr int kStaffSalary = 3;
+constexpr int kStaffRating = 4;
+constexpr int kStaffLoyalty = 5;
+constexpr int kStaffStatus = 6;
+
+// --- payroll table columns --------------------------------------------------------------------
+constexpr int kPayName = 0;
+constexpr int kPayRole = 1;
+constexpr int kPayRule = 2;
+constexpr int kPayBase = 3;
+constexpr int kPayExtras = 4;
+constexpr int kPayTotal = 5;
 
 /// @return the live palette; every colour on this screen is read from here, never literal hex.
 const Palette& theme() { return ThemeManager::instance().palette(); }
@@ -129,6 +154,22 @@ void styleChip(QLabel* chip, const QColor& accentColour) {
                             .arg(accentColour.green())
                             .arg(accentColour.blue())
                             .arg(accentColour.name()));
+}
+
+/// @brief Keeps a destructive action red even when it is unavailable.
+///
+/// The shared sheet paints `#dangerButton:disabled` in the neutral border sage, so "Deactivate"
+/// stopped reading as destructive the moment a non-manager signed in. A muted red says both
+/// things at once: this is destructive, and right now it is not available.
+void styleDestructive(QPushButton* button) {
+    const QColor d = theme().danger;
+    button->setStyleSheet(QStringLiteral("QPushButton:disabled {"
+                                         " background-color: rgba(%1,%2,%3,12%);"
+                                         " border: 1px solid rgba(%1,%2,%3,38%);"
+                                         " color: rgba(%1,%2,%3,60%); }")
+                              .arg(d.red())
+                              .arg(d.green())
+                              .arg(d.blue()));
 }
 
 /// @brief Table cell that sorts on a numeric key while displaying formatted text.
@@ -198,6 +239,189 @@ protected:
 private:
     QWidget* m_target;
     bool m_played = false;
+};
+
+/// @brief Gives a table a column policy that cannot starve its identity column.
+///
+/// `ElegantTable` turns on `stretchLastSection`, so "Status" hoarded the spare width at the right
+/// edge while the `Stretch` name column was squeezed to the header minimum and printed
+/// "Shashank Bh…". Bounded columns (a role, a shift, a salary, a rating) size to their content,
+/// the name column takes what is left, and no section may shrink below @p minSection.
+///
+/// @param table          the table to configure.
+/// @param stretchColumns the free-text columns that absorb the spare width.
+/// @param minSection     narrowest any column may become, in pixels.
+void configureColumns(QTableWidget* table, std::initializer_list<int> stretchColumns,
+                      int minSection = 76) {
+    QHeaderView* head = table->horizontalHeader();
+    head->setStretchLastSection(false);
+    head->setMinimumSectionSize(minSection);
+    for (int column = 0; column < table->columnCount(); ++column) {
+        const bool stretch =
+            std::find(stretchColumns.begin(), stretchColumns.end(), column) !=
+            stretchColumns.end();
+        head->setSectionResizeMode(column, stretch ? QHeaderView::Stretch
+                                                   : QHeaderView::ResizeToContents);
+    }
+    table->setTextElideMode(Qt::ElideRight);
+    table->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+}
+
+/// @brief Opens a sortable table A→Z on @p column instead of Z→A.
+///
+/// `QHeaderView` starts with a descending sort indicator and `setSortingEnabled(true)` honours it,
+/// which is why the roster opened on "Sita … Deepak". A staff list is read alphabetically.
+void sortAscendingBy(QTableWidget* table, int column) {
+    table->horizontalHeader()->setSortIndicator(column, Qt::AscendingOrder);
+    table->sortItems(column, Qt::AscendingOrder);
+}
+
+/// @brief Repeats a cell's own text as its tooltip, so an elided cell is never lost data.
+QTableWidgetItem* withTooltip(QTableWidgetItem* cell, const QString& detail = QString()) {
+    cell->setToolTip(detail.isEmpty() ? cell->text() : detail);
+    return cell;
+}
+
+// ---------------------------------------------------------------------------------------------
+//  This month's variable pay — the inputs each role's monthlyPay() override consumes
+// ---------------------------------------------------------------------------------------------
+
+/// House figures for a month nobody has declared yet. They are *inputs*, never rules: what turns
+/// an input into money is the role's own `monthlyPay()` override, and that lives in the model.
+constexpr int kWaiterTipsPctOfBase = 12;    ///< pooled floor tips, as a share of base salary
+constexpr int kManagerBonusPctOfBase = 10;  ///< the standing supervisory bonus
+constexpr int kChefOvertimeHours = 14;      ///< overtime hours a kitchen shift typically runs up
+
+/// @return the dynamic-property key holding one employee's declared extra for the month.
+QByteArray extraKey(int employeeId) {
+    return QByteArrayLiteral("aluchopMonthExtra_") + QByteArray::number(employeeId);
+}
+
+/// @brief What one role adds on top of base pay, in that role's own vocabulary.
+struct RoleExtra {
+    QString rule;    ///< short column text, e.g. "base + overtime"
+    QString input;   ///< the input as this role measures it, e.g. "14 h × Rs 300.00"
+    QString detail;  ///< tooltip: which override runs, and on what
+    bool editable = false;  ///< false for a role that has no variable component at all
+};
+
+/// @brief Loads this month's declared input into @p person and describes what it will do.
+///
+/// The `employees` table deliberately stores no per-month variable pay (see
+/// persistence::EmployeeRepository::update) — tips, overtime and bonuses are month figures, not
+/// employment terms. So the payroll *preview* is where they are declared: the manager records
+/// them per employee through "Extras…", and until they do, the house figures above stand in.
+///
+/// Nothing here computes pay. It writes an input through the concrete role's own validating
+/// setter and then lets models::Employee::monthlyPay() resolve virtually — a Waiter adds its
+/// tips, a Chef multiplies its hours by Chef::kOvertimeRatePerHour, a Manager adds its bonus,
+/// and an Admin does whatever Manager does because it deliberately never overrode the rule.
+///
+/// @oop-concept Runtime Type Identification :: a role-specific *input* is the one thing a generic
+///              Employee& cannot express, so dynamic_cast asks — and only to ask, never to branch
+///              on the pay formula, which stays behind the virtual call
+RoleExtra applyDeclaredExtra(const QObject* page, models::Employee& person) {
+    const QVariant declared = page->property(extraKey(person.id()).constData());
+    RoleExtra out;
+    out.editable = true;
+
+    if (auto* waiter = dynamic_cast<models::Waiter*>(&person)) {
+        const Money tips = declared.isValid()
+                               ? Money(declared.toLongLong())
+                               : waiter->salary().percent(kWaiterTipsPctOfBase);
+        waiter->addTip(tips);
+        out.rule = QStringLiteral("base + tips");
+        out.input = QStringLiteral("%1 pooled").arg(core::formatNpr(tips));
+        out.detail = QStringLiteral("Waiter::monthlyPay() overrides Employee::monthlyPay() as "
+                                    "salary() + tipsThisMonth().\nTips this month: %1.")
+                         .arg(core::formatNpr(tips));
+        return out;
+    }
+    if (auto* chef = dynamic_cast<models::Chef*>(&person)) {
+        const int hours = declared.isValid() ? declared.toInt() : kChefOvertimeHours;
+        chef->setOvertimeHours(hours);
+        out.rule = QStringLiteral("base + overtime");
+        out.input = QStringLiteral("%1 h × %2")
+                        .arg(hours)
+                        .arg(core::formatNpr(models::Chef::kOvertimeRatePerHour));
+        out.detail = QStringLiteral("Chef::monthlyPay() overrides Employee::monthlyPay() as "
+                                    "salary() + kOvertimeRatePerHour × overtimeHours().\n"
+                                    "%1 hours at %2 an hour.")
+                         .arg(hours)
+                         .arg(core::formatNpr(models::Chef::kOvertimeRatePerHour));
+        return out;
+    }
+    // Admin derives from Manager, so this branch catches both — which is the point: an Admin is
+    // paid exactly as a Manager is, because Admin inherits the rule instead of copying it.
+    if (auto* manager = dynamic_cast<models::Manager*>(&person)) {
+        const Money bonus = declared.isValid()
+                                ? Money(declared.toLongLong())
+                                : manager->salary().percent(kManagerBonusPctOfBase);
+        manager->setMonthlyBonus(bonus);
+        const bool isAdmin = dynamic_cast<models::Admin*>(&person) != nullptr;
+        out.rule = isAdmin ? QStringLiteral("base + bonus (inherited)")
+                           : QStringLiteral("base + bonus");
+        out.input = core::formatNpr(bonus);
+        out.detail =
+            isAdmin ? QStringLiteral("Admin never overrides monthlyPay(): it inherits "
+                                     "Manager::monthlyPay(), salary() + monthlyBonus().\n"
+                                     "Bonus this month: %1.")
+                          .arg(core::formatNpr(bonus))
+                    : QStringLiteral("Manager::monthlyPay() overrides Employee::monthlyPay() as "
+                                     "salary() + monthlyBonus().\nBonus this month: %1.")
+                          .arg(core::formatNpr(bonus));
+        return out;
+    }
+
+    out.rule = QStringLiteral("base only");
+    out.input = QStringLiteral("no variable component");
+    out.detail = QStringLiteral("Employee::monthlyPay() — the base rule this hierarchy refines: "
+                                "the salary and nothing else.");
+    out.editable = false;
+    return out;
+}
+
+/// @brief Keeps a table an exact number of whole rows tall.
+///
+/// A panel hands its table whatever height is left over, which is almost never a whole multiple
+/// of the row height — so the bottom row was drawn sliced through the middle. Capping the table
+/// at `header + n · rowHeight` turns those leftover pixels into bottom padding inside the card,
+/// which reads as deliberate space instead of a clipped row. The height is measured from the
+/// container the layout actually resizes, never from the (capped) table, so the table still grows
+/// when the window does.
+///
+/// @oop-concept Method Overriding :: QObject::eventFilter is overridden to react to another
+///              widget's resize without subclassing that widget
+class WholeRowFitter : public QObject {
+public:
+    /// @param table the table to snap.
+    /// @param container the widget the layout resizes (the table's stack); also the Qt parent.
+    WholeRowFitter(QTableWidget* table, QWidget* container)
+        : QObject(container), m_table(table), m_container(container) {
+        container->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (watched == m_container &&
+            (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
+            snap();
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    void snap() {
+        const int rowH = m_table->verticalHeader()->defaultSectionSize();
+        const int headH = m_table->horizontalHeader()->sizeHint().height();
+        const int available = m_container->height() - headH;
+        if (rowH <= 0 || available < rowH) return;
+        const int target = headH + (available / rowH) * rowH;
+        if (m_table->maximumHeight() != target) m_table->setMaximumHeight(target);
+    }
+
+    QTableWidget* m_table;
+    QWidget* m_container;
 };
 
 void beginRepopulate(QTableWidget* table) {
@@ -330,18 +554,36 @@ EmployeesPage::EmployeesPage(services::AppContext& ctx, QWidget* parent) : Page(
     auto* staffCol = new QVBoxLayout(staffPanel);
     staffCol->setContentsMargins(kPanelPad, kPanelPad, kPanelPad, kPanelPad);
     staffCol->setSpacing(12);
-    staffCol->addWidget(makeLabel(QStringLiteral("Staff"), QStringLiteral("sectionTitle"),
-                                  staffPanel, 13, QFont::DemiBold));
 
+    auto* staffHead = new QHBoxLayout;
+    staffHead->setSpacing(10);
+    staffHead->addWidget(makeLabel(QStringLiteral("Staff"), QStringLiteral("sectionTitle"),
+                                   staffPanel, 13, QFont::DemiBold));
+    staffHead->addStretch(1);
+    auto* diamondChip = makeChip(QStringLiteral("—"), staffPanel);
+    diamondChip->setObjectName(QStringLiteral("staffDiamondChip"));
+    diamondChip->setToolTip(QStringLiteral("Staff who are also enrolled in the loyalty programme "
+                                           "— each of them is one StaffCustomer object."));
+    staffHead->addWidget(diamondChip);
+    auto* enrolBtn = makeButton(QStringLiteral("Enrol in loyalty"), QStringLiteral("ghostButton"),
+                                staffPanel);
+    enrolBtn->setProperty("aluchopRole", QStringLiteral("staffEnrol"));
+    enrolBtn->setToolTip(QStringLiteral("Register the selected staff member in the loyalty "
+                                        "programme under their own phone number. The two records "
+                                        "then fuse into a single StaffCustomer identity."));
+    staffHead->addWidget(enrolBtn);
+    staffCol->addLayout(staffHead);
+
+    // "Role" is the virtual roleName(); "Position" was the stored token that chooses it — the
+    // same fact twice ("Chef" / "CHEF"). The token now rides on the Role cell's tooltip, and the
+    // width it was wasting goes to the name.
     m_table = new ElegantTable(
-        QStringList{QStringLiteral("Name"), QStringLiteral("Role"), QStringLiteral("Position"),
-                    QStringLiteral("Shift"), QStringLiteral("Salary"), QStringLiteral("Rating"),
+        QStringList{QStringLiteral("Name"), QStringLiteral("Role"), QStringLiteral("Shift"),
+                    QStringLiteral("Salary"), QStringLiteral("Rating"),
                     QStringLiteral("Loyalty"), QStringLiteral("Status")},
         staffPanel);
-    m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int column = 1; column <= 7; ++column) {
-        m_table->horizontalHeader()->setSectionResizeMode(column, QHeaderView::ResizeToContents);
-    }
+    configureColumns(m_table, {kStaffName});
+    sortAscendingBy(m_table, kStaffName);
     m_table->setMinimumWidth(560);
 
     auto* staffEmpty = new EmptyState(
@@ -355,8 +597,12 @@ EmployeesPage::EmployeesPage(services::AppContext& ctx, QWidget* parent) : Page(
     staffStack->setObjectName(QStringLiteral("employeesStaffStack"));
     staffStack->addWidget(m_table);
     staffStack->addWidget(staffEmpty);
+    staffStack->setMinimumHeight(5 * kRowH);  // whole rows, never one sliced in half
+    new WholeRowFitter(m_table, staffStack);
     staffCol->addWidget(staffStack, 1);
-    leftColumn->addWidget(staffPanel, 3);
+    // 1 : 1, because a seven-person roster needs seven staff rows *and* seven payroll rows. The
+    // old 3 : 2 split showed the whole roster above a payroll table cut off after three names.
+    leftColumn->addWidget(staffPanel, 1);
 
     auto* payrollPanel = new GlassPanel(this);
     auto* payrollCol = new QVBoxLayout(payrollPanel);
@@ -372,26 +618,40 @@ EmployeesPage::EmployeesPage(services::AppContext& ctx, QWidget* parent) : Page(
     auto* payrollTotal = makeChip(QStringLiteral("—"), payrollPanel);
     payrollTotal->setObjectName(QStringLiteral("payrollTotalChip"));
     payrollHead->addWidget(payrollTotal);
+    auto* extrasBtn = makeButton(QStringLiteral("Extras…"), QStringLiteral("ghostButton"),
+                                 payrollPanel);
+    extrasBtn->setProperty("aluchopRole", QStringLiteral("staffExtras"));
+    extrasBtn->setToolTip(QStringLiteral("Declare this month's variable pay for the selected "
+                                         "employee. Which field you are offered is decided by "
+                                         "their role — tips, overtime hours or a bonus."));
+    payrollHead->addWidget(extrasBtn);
     auto* payrollBtn = makeButton(QStringLiteral("Recompute"), QStringLiteral("ghostButton"),
                                   payrollPanel);
     payrollHead->addWidget(payrollBtn);
     payrollCol->addLayout(payrollHead);
 
-    payrollCol->addWidget(
-        makeLabel(QStringLiteral("Base salary plus each role's own extras — tips for a waiter, "
-                                 "overtime for a chef, a bonus for a manager — all resolved "
-                                 "through one virtual monthlyPay() call."),
-                  QStringLiteral("mutedLabel"), payrollPanel, 11));
+    // Word-wrapped, because this sentence is longer than the panel and used to be sliced off
+    // mid-word at "…one virtual monthlyPay(". A label that wraps costs one extra line of height
+    // and keeps the sentence.
+    auto* payrollBlurb =
+        makeLabel(QStringLiteral("Base salary plus each role's own extra — tips for a waiter, "
+                                 "overtime for a chef, a bonus for a manager, and nothing extra "
+                                 "at all for a plain employee — every one of them resolved "
+                                 "through the same virtual monthlyPay() call. The “Pay rule” "
+                                 "column is the override that ran."),
+                  QStringLiteral("mutedLabel"), payrollPanel, 11);
+    payrollBlurb->setWordWrap(true);
+    payrollBlurb->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+    payrollCol->addWidget(payrollBlurb);
 
     m_payroll = new ElegantTable(
-        QStringList{QStringLiteral("Name"), QStringLiteral("Role"), QStringLiteral("Base"),
-                    QStringLiteral("Extras"), QStringLiteral("Monthly pay")},
+        QStringList{QStringLiteral("Name"), QStringLiteral("Role"), QStringLiteral("Pay rule"),
+                    QStringLiteral("Base"), QStringLiteral("Extras"),
+                    QStringLiteral("Monthly pay")},
         payrollPanel);
     m_payroll->verticalHeader()->setDefaultSectionSize(38);
-    m_payroll->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int column = 1; column <= 4; ++column) {
-        m_payroll->horizontalHeader()->setSectionResizeMode(column, QHeaderView::ResizeToContents);
-    }
+    configureColumns(m_payroll, {kPayName});
+    sortAscendingBy(m_payroll, kPayName);
 
     auto* payrollEmpty = new EmptyState(QStringLiteral("No active staff"),
                                         QStringLiteral("Payroll is computed from active "
@@ -401,11 +661,18 @@ EmployeesPage::EmployeesPage(services::AppContext& ctx, QWidget* parent) : Page(
     payrollStack->setObjectName(QStringLiteral("employeesPayrollStack"));
     payrollStack->addWidget(m_payroll);
     payrollStack->addWidget(payrollEmpty);
+    payrollStack->setMinimumHeight(5 * 38);
+    new WholeRowFitter(m_payroll, payrollStack);
     payrollCol->addWidget(payrollStack, 1);
-    leftColumn->addWidget(payrollPanel, 2);
+    leftColumn->addWidget(payrollPanel, 1);
     body->addLayout(leftColumn, 3);
 
-    // Right column: attendance ---------------------------------------------------------------
+    // Right column: attendance on top, the virtual-base diamond underneath ---------------------
+    // Attendance alone left roughly two thirds of this column as blank card. The space now
+    // carries the one relationship in this project a marker most needs to see.
+    auto* rightColumn = new QVBoxLayout;
+    rightColumn->setSpacing(kPageSpacing);
+
     auto* attendancePanel = new GlassPanel(this);
     attendancePanel->setMinimumWidth(340);
     auto* attendanceCol = new QVBoxLayout(attendancePanel);
@@ -453,12 +720,8 @@ EmployeesPage::EmployeesPage(services::AppContext& ctx, QWidget* parent) : Page(
         QStringList{QStringLiteral("Date"), QStringLiteral("Status"), QStringLiteral("In"),
                     QStringLiteral("Out")},
         attendancePanel);
-    m_attendance->verticalHeader()->setDefaultSectionSize(36);
-    m_attendance->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int column = 1; column <= 3; ++column) {
-        m_attendance->horizontalHeader()->setSectionResizeMode(column,
-                                                               QHeaderView::ResizeToContents);
-    }
+    m_attendance->verticalHeader()->setDefaultSectionSize(38);
+    configureColumns(m_attendance, {0});
 
     auto* attendanceEmpty =
         new EmptyState(QStringLiteral("Nothing recorded"),
@@ -468,9 +731,66 @@ EmployeesPage::EmployeesPage(services::AppContext& ctx, QWidget* parent) : Page(
     attendanceStack->setObjectName(QStringLiteral("employeesAttendanceStack"));
     attendanceStack->addWidget(m_attendance);
     attendanceStack->addWidget(attendanceEmpty);
+    attendanceStack->setMinimumHeight(4 * kRowH);
+    new WholeRowFitter(m_attendance, attendanceStack);
     attendanceCol->addWidget(attendanceStack, 1);
+    rightColumn->addWidget(attendancePanel, 3);
 
-    body->addWidget(attendancePanel, 2);
+    // --- the virtual-base diamond, given its own panel -----------------------------------------
+    // models::StaffCustomer is the single most important inheritance fact in this project: one
+    // object that is simultaneously on the payroll and in the loyalty programme, possible only
+    // because Employee and Customer both derive Person *virtually*. It used to be visible as one
+    // number in one table cell. It now says what it is.
+    auto* diamondPanel = new GlassPanel(this);
+    auto* diamondCol = new QVBoxLayout(diamondPanel);
+    diamondCol->setContentsMargins(kPanelPad, kPanelPad, kPanelPad, kPanelPad);
+    diamondCol->setSpacing(10);
+
+    auto* diamondHead = new QHBoxLayout;
+    diamondHead->setSpacing(10);
+    diamondHead->addWidget(makeLabel(QStringLiteral("◆  Staff-customers"),
+                                     QStringLiteral("sectionTitle"), diamondPanel, 13,
+                                     QFont::DemiBold));
+    diamondHead->addStretch(1);
+    auto* diamondCount = makeChip(QStringLiteral("—"), diamondPanel);
+    diamondCount->setObjectName(QStringLiteral("staffDiamondCountChip"));
+    diamondHead->addWidget(diamondCount);
+    diamondCol->addLayout(diamondHead);
+
+    auto* diamondNote =
+        makeLabel(QStringLiteral("One person, one identity, two books. Employee and Customer both "
+                                 "inherit Person as a virtual base, so a colleague who eats here "
+                                 "is a single StaffCustomer object — one id, one name, one phone "
+                                 "— carrying a salary and a loyalty balance at the same time."),
+                  QStringLiteral("mutedLabel"), diamondPanel, 11);
+    diamondNote->setWordWrap(true);
+    diamondCol->addWidget(diamondNote);
+
+    auto* diamondTable = new ElegantTable(
+        QStringList{QStringLiteral("Staff-customer"), QStringLiteral("Loyalty"),
+                    QStringLiteral("Till discount")},
+        diamondPanel);
+    diamondTable->setObjectName(QStringLiteral("staffDiamondTable"));
+    diamondTable->setSortingEnabled(false);
+    diamondTable->verticalHeader()->setDefaultSectionSize(38);
+    configureColumns(diamondTable, {0});
+
+    auto* diamondEmpty =
+        new EmptyState(QStringLiteral("Nobody is on both books yet"),
+                       QStringLiteral("Pick a colleague in the staff list and press “Enrol in "
+                                      "loyalty”. The moment their phone number is also a "
+                                      "customer's, the two rows fuse into one StaffCustomer."),
+                       diamondPanel);
+    auto* diamondStack = new QStackedWidget(diamondPanel);
+    diamondStack->setObjectName(QStringLiteral("employeesDiamondStack"));
+    diamondStack->addWidget(diamondTable);
+    diamondStack->addWidget(diamondEmpty);
+    diamondStack->setMinimumHeight(3 * 38);
+    new WholeRowFitter(diamondTable, diamondStack);
+    diamondCol->addWidget(diamondStack, 1);
+    rightColumn->addWidget(diamondPanel, 2);
+
+    body->addLayout(rightColumn, 2);
     page->addLayout(body, 1);
 
     // --- wiring -----------------------------------------------------------------------------
@@ -480,6 +800,194 @@ EmployeesPage::EmployeesPage(services::AppContext& ctx, QWidget* parent) : Page(
     connect(m_table, &QTableWidget::itemDoubleClicked, this,
             [this](QTableWidgetItem*) { onEdit(); });
     connect(deactivateBtn, &QPushButton::clicked, this, &EmployeesPage::onDeactivate);
+
+    // Enrolling a staff member in the loyalty programme is what actually *creates* a
+    // models::StaffCustomer: EmployeeService::staffCustomerFor() fuses the two rows the moment a
+    // customer shares an active employee's phone number. Without this action the diamond can only
+    // be demonstrated by hand-editing the database, and the shipped seed has nobody enrolled.
+    connect(enrolBtn, &QPushButton::clicked, this, [this]() {
+        const int id = selectedEmployeeId();
+        if (id == 0) {
+            m_ctx.notifications().notify(QStringLiteral("Nobody selected"),
+                                         QStringLiteral("Choose a staff member first."), 2);
+            return;
+        }
+        const std::optional<models::Employee> person = m_ctx.employees().byId(id);
+        if (!person) {
+            refresh();
+            return;
+        }
+        if (person->phone().trimmed().isEmpty()) {
+            m_ctx.notifications().notify(
+                QStringLiteral("No phone number"),
+                QStringLiteral("The phone number is the key the two records are fused on — give "
+                               "%1 one first.").arg(person->name()),
+                2);
+            return;
+        }
+        if (const auto existing = m_ctx.customers().byPhone(person->phone())) {
+            m_ctx.notifications().notify(
+                QStringLiteral("Already enrolled"),
+                QStringLiteral("%1 is already in the loyalty programme with %2 points.")
+                    .arg(existing->name())
+                    .arg(existing->loyaltyPoints()),
+                2);
+            refresh();
+            return;
+        }
+
+        QMessageBox confirm(this);
+        confirm.setWindowTitle(QStringLiteral("Enrol in loyalty"));
+        confirm.setIcon(QMessageBox::Question);
+        confirm.setText(QStringLiteral("Enrol %1 in the loyalty programme?").arg(person->name()));
+        confirm.setInformativeText(
+            QStringLiteral("They keep one identity: the same name and the same phone number now "
+                           "carry both a payroll record and a loyalty balance, which is exactly "
+                           "what a StaffCustomer is. Bills raised against that phone number then "
+                           "qualify for the staff discount."));
+        confirm.setStandardButtons(QMessageBox::Cancel | QMessageBox::Yes);
+        confirm.setDefaultButton(QMessageBox::Yes);
+        confirm.button(QMessageBox::Yes)->setText(QStringLiteral("Enrol"));
+        confirm.button(QMessageBox::Yes)->setObjectName(QStringLiteral("primaryButton"));
+        confirm.button(QMessageBox::Cancel)->setObjectName(QStringLiteral("ghostButton"));
+        if (confirm.exec() != QMessageBox::Yes) return;
+
+        const auto created = m_ctx.customers().create(person->name(), person->phone(),
+                                                      person->email());
+        if (created.isOk()) {
+            m_ctx.notifications().notify(
+                QStringLiteral("Enrolled"),
+                QStringLiteral("%1 is now a staff-customer — one identity on both books.")
+                    .arg(person->name()),
+                1);
+            refresh();
+        } else {
+            m_ctx.notifications().notify(QStringLiteral("Could not enrol"), created.error(), 3);
+        }
+    });
+    // "Extras…" is where the month's variable pay is declared. Which single field the dialog
+    // offers is decided by the concrete role, which is the same fact the payroll table's "Pay
+    // rule" column states — a waiter is asked for tips, a chef for hours, a manager for a bonus,
+    // and an employee with no override is told it has none.
+    connect(extrasBtn, &QPushButton::clicked, this, [this]() {
+        if (!m_ctx.auth().hasRole(models::UserRole::Manager)) {
+            m_ctx.notifications().notify(QStringLiteral("Not allowed"),
+                                         QStringLiteral("Declaring payroll extras requires "
+                                                        "manager access."),
+                                         3);
+            return;
+        }
+        const int id = selectedEmployeeId();
+        if (id == 0) {
+            m_ctx.notifications().notify(QStringLiteral("Nobody selected"),
+                                         QStringLiteral("Choose a staff member first."), 2);
+            return;
+        }
+        // The typed roster, not the base-sliced byId(): only the concrete object knows which
+        // input its own monthlyPay() override consumes.
+        std::vector<std::unique_ptr<models::Employee>> roster = m_ctx.employees().staff();
+        models::Employee* person = nullptr;
+        for (const std::unique_ptr<models::Employee>& candidate : roster) {
+            if (candidate && candidate->id() == id) {
+                person = candidate.get();
+                break;
+            }
+        }
+        if (!person) {
+            refresh();
+            return;
+        }
+
+        const bool isChef = dynamic_cast<models::Chef*>(person) != nullptr;
+        const bool isWaiter = dynamic_cast<models::Waiter*>(person) != nullptr;
+        const bool isManager = dynamic_cast<models::Manager*>(person) != nullptr;
+        if (!isChef && !isWaiter && !isManager) {
+            m_ctx.notifications().notify(
+                QStringLiteral("No variable pay"),
+                QStringLiteral("%1's role does not override monthlyPay(), so there is nothing to "
+                               "add on top of the base salary.").arg(person->name()),
+                2);
+            return;
+        }
+
+        const QVariant declared = property(extraKey(id).constData());
+
+        QDialog dialog(this);
+        dialog.setWindowTitle(QStringLiteral("This month's extra"));
+        dialog.setMinimumWidth(420);
+        auto* column = new QVBoxLayout(&dialog);
+        column->setContentsMargins(22, 22, 22, 22);
+        column->setSpacing(14);
+        column->addWidget(makeLabel(QStringLiteral("%1 · %2")
+                                        .arg(person->name(), person->roleName()),
+                                    QStringLiteral("sectionTitle"), &dialog, 16, QFont::DemiBold));
+        auto* why = makeLabel(
+            isChef ? QStringLiteral("Chef::monthlyPay() adds overtime hours at the house rate of "
+                                    "%1 an hour. Hours are a month figure, so they are declared "
+                                    "here rather than stored on the employment record.")
+                         .arg(core::formatNpr(models::Chef::kOvertimeRatePerHour))
+                   : isWaiter
+                         ? QStringLiteral("Waiter::monthlyPay() adds the tips collected this "
+                                          "month on top of the base salary.")
+                         : QStringLiteral("Manager::monthlyPay() adds a fixed monthly bonus on "
+                                          "top of the base salary."),
+            QStringLiteral("mutedLabel"), &dialog, 11);
+        why->setWordWrap(true);
+        column->addWidget(why);
+
+        auto* form = new QFormLayout;
+        form->setSpacing(10);
+        auto* amount = new QSpinBox(&dialog);
+        amount->setMinimumHeight(kControlH);
+        if (isChef) {
+            amount->setRange(0, 400);
+            amount->setSuffix(QStringLiteral(" h"));
+            amount->setValue(declared.isValid() ? declared.toInt() : kChefOvertimeHours);
+            form->addRow(QStringLiteral("Overtime"), amount);
+        } else {
+            const Money fallback =
+                isWaiter ? person->salary().percent(kWaiterTipsPctOfBase)
+                         : person->salary().percent(kManagerBonusPctOfBase);
+            amount->setRange(0, 10000000);
+            amount->setSingleStep(500);
+            amount->setPrefix(QStringLiteral("Rs "));
+            amount->setGroupSeparatorShown(true);
+            amount->setValue(static_cast<int>(
+                declared.isValid() ? Money(declared.toLongLong()).wholeRupees()
+                                   : fallback.wholeRupees()));
+            form->addRow(isWaiter ? QStringLiteral("Tips") : QStringLiteral("Bonus"), amount);
+        }
+        column->addLayout(form);
+
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel |
+                                                 QDialogButtonBox::RestoreDefaults,
+                                             &dialog);
+        buttons->button(QDialogButtonBox::Ok)->setText(QStringLiteral("Apply"));
+        buttons->button(QDialogButtonBox::Ok)->setObjectName(QStringLiteral("primaryButton"));
+        buttons->button(QDialogButtonBox::Cancel)->setObjectName(QStringLiteral("ghostButton"));
+        buttons->button(QDialogButtonBox::RestoreDefaults)
+            ->setText(QStringLiteral("House figure"));
+        buttons->button(QDialogButtonBox::RestoreDefaults)
+            ->setObjectName(QStringLiteral("ghostButton"));
+        column->addWidget(buttons);
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        // "House figure" clears the declaration so the default stands in again.
+        connect(buttons->button(QDialogButtonBox::RestoreDefaults), &QPushButton::clicked, &dialog,
+                [&dialog]() { dialog.done(QDialog::Accepted + 1); });
+
+        const int verdict = dialog.exec();
+        if (verdict == QDialog::Rejected) return;
+        if (verdict == QDialog::Accepted + 1) {
+            setProperty(extraKey(id).constData(), QVariant());  // back to the house figure
+        } else {
+            setProperty(extraKey(id).constData(),
+                        isChef ? QVariant(static_cast<qlonglong>(amount->value()))
+                               : QVariant(static_cast<qlonglong>(
+                                     Money::fromRupees(amount->value()).paisa())));
+        }
+        refresh();
+    });
     connect(markBtn, &QPushButton::clicked, this, &EmployeesPage::onMarkAttendance);
     connect(payrollBtn, &QPushButton::clicked, this, &EmployeesPage::onShowPayroll);
     connect(month, &QDateEdit::dateChanged, this, [this](const QDate&) {
@@ -513,8 +1021,12 @@ void EmployeesPage::refresh() {
         for (QPushButton* button : findChildren<QPushButton*>()) {
             const QString role = button->property("aluchopRole").toString();
             if (role == QLatin1String("staffHire") || role == QLatin1String("staffEdit") ||
-                role == QLatin1String("staffDeactivate") || role == QLatin1String("staffMark")) {
+                role == QLatin1String("staffDeactivate") || role == QLatin1String("staffMark") ||
+                role == QLatin1String("staffExtras")) {
                 button->setEnabled(mayManage);
+            }
+            if (role == QLatin1String("staffDeactivate")) {
+                styleDestructive(button);  // re-read the palette: Light/Dark switch live
             }
         }
         for (QLabel* label : findChildren<QLabel*>()) {
@@ -539,7 +1051,9 @@ void EmployeesPage::refresh() {
         for (const std::unique_ptr<models::Employee>& person : roster) {
             if (person && !person->phone().isEmpty()) staffPhones.insert(phoneKey(person->phone()));
         }
-        QHash<QString, QString> loyaltyByPhone;  // phone key -> "340 pts · staff −10%"
+        QHash<QString, QString> loyaltyByPhone;  // phone key -> "◆  340 pts"
+        QHash<QString, QString> fusedNote;       // phone key -> what that fusion means
+        std::vector<models::StaffCustomer> fusedPeople;  // the diamond panel's own list
         if (!staffPhones.isEmpty()) {
             for (const models::Customer& guest : m_ctx.customers().all()) {
                 const QString key = phoneKey(guest.phone());
@@ -547,11 +1061,19 @@ void EmployeesPage::refresh() {
                 const std::optional<models::StaffCustomer> fused =
                     m_ctx.employees().staffCustomerFor(guest.id());
                 if (!fused) continue;
+                fusedPeople.push_back(*fused);
                 // One object, one identity: name() comes from the shared virtual Person base,
                 // loyaltyPoints() from the Customer branch, staffDiscountPercent() is its own.
-                loyaltyByPhone.insert(key, QStringLiteral("%1 pts · staff −%2%")
-                                               .arg(fused->loyaltyPoints())
-                                               .arg(fused->staffDiscountPercent()));
+                loyaltyByPhone.insert(key, QStringLiteral("◆  %1 pts")
+                                               .arg(fused->loyaltyPoints()));
+                fusedNote.insert(key,
+                                 QStringLiteral("%1\n\nOn the payroll AND in the loyalty "
+                                                "programme: one StaffCustomer object with a "
+                                                "single shared identity, %2 loyalty points, and "
+                                                "%3%% off at the till.")
+                                     .arg(fused->displayLabel())
+                                     .arg(fused->loyaltyPoints())
+                                     .arg(fused->staffDiscountPercent()));
             }
         }
 
@@ -570,24 +1092,29 @@ void EmployeesPage::refresh() {
             QFont nameFont = nameCell->font();
             nameFont.setWeight(QFont::DemiBold);
             nameCell->setFont(nameFont);
-            m_table->setItem(rowIndex, 0, nameCell);
+            m_table->setItem(rowIndex, kStaffName,
+                             withTooltip(nameCell, QStringLiteral("%1\n%2\n%3")
+                                                       .arg(person->displayLabel(),
+                                                            person->phone().isEmpty()
+                                                                ? QStringLiteral("no phone on "
+                                                                                 "file")
+                                                                : person->phone(),
+                                                            person->email())));
 
-            // roleName() is virtual: Waiter/Chef/Manager/Admin each answer for themselves.
+            // roleName() is virtual: Waiter/Chef/Manager/Admin each answer for themselves. The
+            // stored position token (the thing that chose the subclass) is the tooltip, not a
+            // second column repeating the same word in capitals.
             auto* roleCell = textCell(person->roleName());
             roleCell->setForeground(p.primary);
-            roleCell->setToolTip(person->displayLabel());
-            m_table->setItem(rowIndex, 1, roleCell);
+            roleCell->setToolTip(QStringLiteral("%1\nStored position token “%2” — that token is "
+                                                "what chooses the concrete C++ subclass.")
+                                     .arg(person->displayLabel(), person->position()));
+            m_table->setItem(rowIndex, kStaffRole, roleCell);
 
-            auto* positionCell = textCell(person->position());
-            positionCell->setForeground(p.textMuted);
-            positionCell->setToolTip(QStringLiteral("The stored position token is what chooses "
-                                                    "the concrete C++ subclass."));
-            m_table->setItem(rowIndex, 2, positionCell);
-
-            m_table->setItem(rowIndex, 3, textCell(person->shift()));
+            m_table->setItem(rowIndex, kStaffShift, textCell(person->shift()));
 
             const Money salary = person->salary();
-            m_table->setItem(rowIndex, 4,
+            m_table->setItem(rowIndex, kStaffSalary,
                              numberCell(core::formatNpr(salary),
                                         static_cast<double>(salary.paisa())));
 
@@ -598,29 +1125,42 @@ void EmployeesPage::refresh() {
                                                                        : p.textMuted);
             ratingCell->setToolTip(QStringLiteral("Performance rating %1 of 5")
                                        .arg(person->performanceRating()));
-            m_table->setItem(rowIndex, 5, ratingCell);
+            m_table->setItem(rowIndex, kStaffRating, ratingCell);
 
+            // The diamond, one row at a time: ◆ marks a staff member who is simultaneously a
+            // loyalty customer, and the number beside it is that person's real points balance
+            // read through the Customer branch of the fused StaffCustomer object.
             const QString loyalty = loyaltyByPhone.value(phoneKey(person->phone()));
-            auto* loyaltyCell = textCell(loyalty.isEmpty() ? QStringLiteral("—") : loyalty);
+            auto* loyaltyCell = textCell(loyalty.isEmpty() ? QStringLiteral("Not enrolled")
+                                                           : loyalty);
             if (!loyalty.isEmpty()) {
                 ++fusedCount;
-                loyaltyCell->setForeground(p.secondary);
+                // A badge, not just a coloured number: this cell is the only place in the roster
+                // where a row is simultaneously an Employee and a Customer, and it should be
+                // impossible to scan past.
+                QColor tint = p.accent;
+                tint.setAlpha(70);
+                loyaltyCell->setBackground(QBrush(tint));
+                loyaltyCell->setForeground(p.primary);
+                loyaltyCell->setTextAlignment(Qt::AlignCenter);
                 QFont loyaltyFont = loyaltyCell->font();
-                loyaltyFont.setWeight(QFont::DemiBold);
+                loyaltyFont.setWeight(QFont::Bold);
                 loyaltyCell->setFont(loyaltyFont);
-                loyaltyCell->setToolTip(
-                    QStringLiteral("%1 is on the payroll AND in the loyalty programme — one "
-                                   "StaffCustomer object with a single shared identity.")
-                        .arg(person->name()));
+                loyaltyCell->setToolTip(fusedNote.value(phoneKey(person->phone())));
             } else {
                 loyaltyCell->setForeground(p.textMuted);
+                loyaltyCell->setToolTip(
+                    QStringLiteral("%1 is not in the loyalty programme. Select the row and press "
+                                   "“Enrol in loyalty” to fuse the two records into one "
+                                   "StaffCustomer.")
+                        .arg(person->name()));
             }
-            m_table->setItem(rowIndex, 6, loyaltyCell);
+            m_table->setItem(rowIndex, kStaffLoyalty, loyaltyCell);
 
             auto* statusCell = textCell(person->isActive() ? QStringLiteral("Active")
                                                            : QStringLiteral("Inactive"));
             statusCell->setForeground(person->isActive() ? p.success : p.danger);
-            m_table->setItem(rowIndex, 7, statusCell);
+            m_table->setItem(rowIndex, kStaffStatus, statusCell);
 
             ++rowIndex;
         }
@@ -651,6 +1191,16 @@ void EmployeesPage::refresh() {
                 }
                 label->setText(text);
             }
+        }
+
+        // The diamond's own headline: how many staff are simultaneously loyalty customers.
+        if (auto* chip = findChild<QLabel*>(QStringLiteral("staffDiamondChip"))) {
+            chip->setText(fusedCount == 0
+                              ? QStringLiteral("no staff enrolled")
+                              : QStringLiteral("◆  %1 staff-customer%2")
+                                    .arg(fusedCount)
+                                    .arg(fusedCount == 1 ? QString() : QStringLiteral("s")));
+            styleChip(chip, fusedCount > 0 ? p.secondary : p.textMuted);
         }
 
         onShowPayroll();

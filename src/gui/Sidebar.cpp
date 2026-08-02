@@ -15,63 +15,47 @@
  *    SVG file does exist at the given path it is used instead, so adding artwork later needs no
  *    code change.
  *
- * 2. **The selection indicator is a real widget, not a repaint.** A 4 px pill slides between
- *    entries with a QPropertyAnimation, which is what makes navigation feel continuous rather
- *    than like nine independent buttons switching on and off.
+ * 2. **Selection is carried by the pill alone.** There is deliberately no vertical marker bar down
+ *    the edge of the rail: the current page is announced by the rounded sage pill behind the
+ *    entry, its hairline, and the brighter, heavier label and glyph inside it. That is one idea
+ *    instead of two, and it leaves the rail's left margin clean.
  */
 
 #include "aluchop/gui/Sidebar.hpp"
 
 #include "aluchop/gui/ThemeManager.hpp"
 
-#include <QAbstractAnimation>
 #include <QColor>
-#include <QEasingCurve>
-#include <QEvent>
 #include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
-#include <QObject>
 #include <QPainter>
 #include <QPalette>
 #include <QPixmap>
-#include <QPropertyAnimation>
-#include <QRect>
+#include <QRectF>
 #include <QSize>
 #include <QSizePolicy>
-#include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QtSvg/QSvgRenderer>
 
-#include <functional>
-#include <utility>
-
 namespace aluchop::gui {
 namespace {
 
-constexpr int kRailWidth = 232;      ///< Wide enough for icon + label, narrow enough to ignore.
-constexpr int kButtonHeight = 44;    ///< Comfortable touch/pointer target; nothing cramped.
-constexpr int kIndicatorWidth = 4;   ///< The sliding selection pill.
+constexpr int kRailWidth = 232;     ///< Wide enough for icon + label, narrow enough to ignore.
+constexpr int kButtonHeight = 44;   ///< Comfortable touch/pointer target; nothing cramped.
 
-/// Event forwarder — Sidebar's frozen header declares no `resizeEvent`, so geometry-dependent
-/// work is driven through an installed filter instead of an override.
-class EventHook : public QObject {
-public:
-    EventHook(QObject* owner, std::function<void(QEvent*)> onEvent)
-        : QObject(owner), m_onEvent(std::move(onEvent)) {}
-
-protected:
-    bool eventFilter(QObject* watched, QEvent* event) override {
-        m_onEvent(event);
-        return QObject::eventFilter(watched, event);
-    }
-
-private:
-    std::function<void(QEvent*)> m_onEvent;
-};
+/// @return @p base blended @p ratio of the way towards @p other (0 = base, 1 = other).
+QColor blend(const QColor& base, const QColor& other, double ratio) {
+    const auto lerp = [ratio](int a, int b) {
+        return static_cast<int>(a + (b - a) * ratio + 0.5);
+    };
+    return QColor(lerp(base.red(), other.red()),
+                  lerp(base.green(), other.green()),
+                  lerp(base.blue(), other.blue()));
+}
 
 /// @return stroke-based SVG body for a navigation glyph name.
 QString navGlyphBody(const QString& key) {
@@ -154,29 +138,36 @@ QPixmap renderNavGlyph(const QString& path, const QColor& colour, int px) {
     return pm;
 }
 
-/// Two-state icon: muted while idle, brand green while checked.
-QIcon navIcon(const QString& path, const Palette& p) {
-    QIcon icon;
-    icon.addPixmap(renderNavGlyph(path, p.textMuted, 20), QIcon::Normal, QIcon::Off);
-    icon.addPixmap(renderNavGlyph(path, p.text, 20), QIcon::Active, QIcon::Off);
-    icon.addPixmap(renderNavGlyph(path, p.primary, 20), QIcon::Normal, QIcon::On);
-    icon.addPixmap(renderNavGlyph(path, p.primary, 20), QIcon::Active, QIcon::On);
-    return icon;
-}
-
 /// @return the rail's backdrop — a whisper of accent over the card colour, matching the `@rail@`
 ///         token ThemeManager bakes into the sheet.
 ///
 /// A plain QWidget does not paint a style-sheet background (see the gotcha in ThemeManager.hpp),
 /// so the rail must colour itself through its QPalette; this keeps the two routes in step.
 QColor railColour(const Palette& p, ThemeManager::Mode mode) {
-    const double ratio = (mode == ThemeManager::Mode::Light) ? 0.14 : 0.05;
-    const auto lerp = [ratio](int a, int b) {
-        return static_cast<int>(a + (b - a) * ratio + 0.5);
-    };
-    return QColor(lerp(p.card.red(), p.accent.red()),
-                  lerp(p.card.green(), p.accent.green()),
-                  lerp(p.card.blue(), p.accent.blue()));
+    return blend(p.card, p.accent, mode == ThemeManager::Mode::Light ? 0.14 : 0.05);
+}
+
+/// @return the ink shared by the selected entry's glyph and its label.
+///
+/// This mirrors the `@railActiveText@` token ThemeManager bakes into the sheet. The glyph is
+/// painted here and the label is coloured there, so the two have to be computed from the same
+/// rule or a selected entry would show a green icon beside a differently-green word. The brand
+/// primary is *not* used: on the dark theme's selected pill it only reaches 2.7:1, where this
+/// lighter member of the same hue reaches 5.5:1.
+QColor railActiveInk(const Palette& p, ThemeManager::Mode mode) {
+    return (mode == ThemeManager::Mode::Light) ? blend(p.primary, p.text, 0.45)
+                                               : blend(p.accent, QColor(255, 255, 255), 0.35);
+}
+
+/// Two-state icon: muted while idle, lifted to the selection ink while checked.
+QIcon navIcon(const QString& path, const Palette& p, ThemeManager::Mode mode) {
+    const QColor active = railActiveInk(p, mode);
+    QIcon icon;
+    icon.addPixmap(renderNavGlyph(path, p.textMuted, 20), QIcon::Normal, QIcon::Off);
+    icon.addPixmap(renderNavGlyph(path, p.text, 20), QIcon::Active, QIcon::Off);
+    icon.addPixmap(renderNavGlyph(path, active, 20), QIcon::Normal, QIcon::On);
+    icon.addPixmap(renderNavGlyph(path, active, 20), QIcon::Active, QIcon::On);
+    return icon;
 }
 
 } // namespace
@@ -219,30 +210,41 @@ Sidebar::Sidebar(QWidget* parent) : QWidget(parent) {
     column->addLayout(brandRow);
     column->addSpacing(26);
 
-    // --- navigation entries live in their own container so the sliding indicator can be
-    //     positioned in the container's coordinate space ----------------------------------
+    // --- navigation entries ---------------------------------------------------------------
+    // Their own container so addEntry() has one stable place to append to, whatever else the
+    // column above and below it grows into.
     auto* nav = new QWidget(this);
     nav->setObjectName(QStringLiteral("sidebarNav"));
     auto* navColumn = new QVBoxLayout(nav);
     navColumn->setContentsMargins(0, 0, 0, 0);
     navColumn->setSpacing(3);
 
-    auto* indicator = new QFrame(nav);
-    indicator->setObjectName(QStringLiteral("sidebarIndicator"));
-    indicator->setFrameShape(QFrame::NoFrame);
-    indicator->setFixedWidth(kIndicatorWidth);
-    indicator->resize(kIndicatorWidth, 22);
-    indicator->hide();
-    indicator->raise();
-
     column->addWidget(nav);
     column->addStretch(1);
 
     // --- footer hint --------------------------------------------------------------------
-    auto* hint = new QLabel(QStringLiteral("Press  Ctrl+K  to search everywhere"), this);
-    hint->setObjectName(QStringLiteral("mutedLabel"));
-    hint->setWordWrap(true);
-    hint->setContentsMargins(8, 0, 8, 0);
+    // One sentence set as prose used to wrap mid-phrase inside the 204 px rail ("Press Ctrl+K to
+    // search / everywhere"). The same information is composed instead: a keycap chip and a short
+    // label that both fit on one line by construction, so there is no wrap point to get wrong.
+    auto* hint = new QFrame(this);
+    hint->setObjectName(QStringLiteral("sidebarHint"));
+    hint->setFrameShape(QFrame::NoFrame);
+    hint->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+
+    auto* hintRow = new QHBoxLayout(hint);
+    hintRow->setContentsMargins(10, 8, 10, 8);
+    hintRow->setSpacing(8);
+
+    auto* chip = new QLabel(QStringLiteral("Ctrl K"), hint);
+    chip->setObjectName(QStringLiteral("kbdChip"));
+    chip->setAlignment(Qt::AlignCenter);
+    hintRow->addWidget(chip, 0, Qt::AlignVCenter);
+
+    auto* hintText = new QLabel(QStringLiteral("Search everywhere"), hint);
+    hintText->setObjectName(QStringLiteral("sidebarHintText"));
+    hintText->setWordWrap(false);
+    hintRow->addWidget(hintText, 1, Qt::AlignVCenter);
+
     column->addWidget(hint);
 
     // --- palette-driven surfaces ---------------------------------------------------------
@@ -257,19 +259,11 @@ Sidebar::Sidebar(QWidget* parent) : QWidget(parent) {
         mark->setPixmap(renderNavGlyph(QStringLiteral("brand"), p.primary, 26));
 
         for (QToolButton* button : m_buttons) {
-            button->setIcon(navIcon(button->property("glyphPath").toString(), p));
+            button->setIcon(navIcon(button->property("glyphPath").toString(), p, theme.mode()));
         }
     };
     repaintSurfaces();
     connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, repaintSurfaces);
-
-    // Geometry-dependent placement of the indicator, without a resizeEvent override.
-    installEventFilter(new EventHook(this, [this](QEvent* event) {
-        const QEvent::Type t = event->type();
-        if (t == QEvent::Resize || t == QEvent::Show) {
-            setActive(m_active);
-        }
-    }));
 }
 
 /// @oop-concept STL vector :: entries are appended at runtime, so the button list is a
@@ -293,7 +287,8 @@ void Sidebar::addEntry(const QString& iconSvgPath, const QString& label) {
     button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     button->setToolTip(label);
     button->setProperty("glyphPath", iconSvgPath);
-    button->setIcon(navIcon(iconSvgPath, ThemeManager::instance().palette()));
+    button->setIcon(navIcon(iconSvgPath, ThemeManager::instance().palette(),
+                            ThemeManager::instance().mode()));
 
     // The index is captured by value: an entry's meaning is fixed the moment it is added.
     connect(button, &QToolButton::clicked, this, [this, index]() {
@@ -304,51 +299,20 @@ void Sidebar::addEntry(const QString& iconSvgPath, const QString& label) {
     qobject_cast<QVBoxLayout*>(nav->layout())->addWidget(button);
     m_buttons.push_back(button);
 
-    if (index == m_active) {
-        // Geometry is not valid until the layout has run, so light the first entry once the
-        // event loop has caught up.
-        QTimer::singleShot(0, this, [this]() { setActive(m_active); });
-    }
+    // The pill is pure style state, so the entry that is already current can be lit the instant it
+    // exists — nothing here waits on geometry the way a sliding marker would have had to.
+    button->setChecked(index == m_active);
 }
 
 void Sidebar::setActive(int index) {
-    if (m_buttons.empty()) {
-        return;
-    }
     if (index < 0 || index >= static_cast<int>(m_buttons.size())) {
-        return;   // out-of-range is a no-op so callers need no bounds test
+        return;   // out-of-range (and the empty rail) is a no-op so callers need no bounds test
     }
 
     m_active = index;
     for (std::size_t i = 0; i < m_buttons.size(); ++i) {
         m_buttons[i]->setChecked(static_cast<int>(i) == index);
     }
-
-    auto* indicator = findChild<QFrame*>(QStringLiteral("sidebarIndicator"));
-    QToolButton* active = m_buttons[static_cast<std::size_t>(index)];
-    if (!indicator || active->height() <= 0) {
-        return;
-    }
-
-    const int pillHeight = active->height() - 16;
-    const QRect target(0, active->y() + 8, kIndicatorWidth, pillHeight);
-
-    if (!indicator->isVisible()) {
-        indicator->setGeometry(target);
-        indicator->show();
-        indicator->raise();
-        return;
-    }
-    if (indicator->geometry() == target) {
-        return;
-    }
-
-    auto* slide = new QPropertyAnimation(indicator, "geometry", indicator);
-    slide->setDuration(200);
-    slide->setStartValue(indicator->geometry());
-    slide->setEndValue(target);
-    slide->setEasingCurve(QEasingCurve::InOutQuad);
-    slide->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
 } // namespace aluchop::gui

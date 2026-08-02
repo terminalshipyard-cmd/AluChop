@@ -55,6 +55,7 @@
 #include <QStandardPaths>
 #include <QString>
 #include <QStringList>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QVariant>
@@ -120,6 +121,30 @@ QVBoxLayout* buildCard(const QString& title, const QString& subtitle, QWidget* p
 /// A small caption above a form field.
 QLabel* fieldCaption(const QString& text, QWidget* parent) {
     return styledLabel(text, QStringLiteral("statCardTitle"), parent, -1, QFont::DemiBold);
+}
+
+/**
+ * @brief One chip of the live palette specimen.
+ *
+ * Deliberately a QLabel and not a QPushButton. The previous specimen built three real buttons and
+ * then disabled them so they could not be clicked — which handed every chip to the *disabled*
+ * branch of the stylesheet, so the "Danger" swatch rendered in the disabled greenish grey and
+ * "Primary" in a washed-out fill. A palette preview showing the wrong palette is worse than no
+ * preview at all. A label has no interactive states to lose to, so `#swatch*` in the generated
+ * sheet is the only rule that can ever paint it: what you see is exactly the live palette entry,
+ * with the ink ThemeManager measured as legible on it.
+ *
+ * @param text     the palette role, e.g. "Primary".
+ * @param role     the objectName the sheet styles — `swatchPrimary`, `swatchDanger`, …
+ * @param parent   owning widget.
+ */
+QLabel* paletteSwatch(const QString& text, const QString& role, QWidget* parent) {
+    auto* chip = new QLabel(text, parent);
+    chip->setObjectName(role);
+    chip->setAlignment(Qt::AlignCenter);
+    chip->setMinimumHeight(34);
+    chip->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    return chip;
 }
 
 // ---------------------------------------------------------------------------
@@ -350,19 +375,46 @@ SettingsPage::SettingsPage(services::AppContext& ctx, QWidget* parent) : Page(ct
     previewRow->addWidget(styledLabel(QStringLiteral("Live preview"),
                                       QStringLiteral("statCardTitle"), preview, -1,
                                       QFont::DemiBold));
-    auto* previewPrimary = makeButton(QStringLiteral("Primary"), QStringLiteral("primaryButton"),
-                                      preview);
-    previewPrimary->setEnabled(false);
-    previewRow->addWidget(previewPrimary);
-    auto* previewGhost = makeButton(QStringLiteral("Secondary"), QStringLiteral("ghostButton"),
-                                    preview);
-    previewGhost->setEnabled(false);
-    previewRow->addWidget(previewGhost);
-    auto* previewDanger = makeButton(QStringLiteral("Danger"), QStringLiteral("dangerButton"),
-                                     preview);
-    previewDanger->setEnabled(false);
-    previewRow->addWidget(previewDanger);
+
+    /// @oop-concept Object Arrays :: the five specimen chips are one ordered vocabulary, so they
+    /// are declared as data and built in a loop rather than copy-pasted five times.
+    struct Specimen {
+        const char* caption;
+        const char* role;
+        const QColor Palette::*entry;   ///< pointer-to-member: which palette colour this chip shows
+    };
+    const Specimen specimens[] = {
+        {"Primary", "swatchPrimary", &Palette::primary},
+        {"Secondary", "swatchSecondary", &Palette::secondary},
+        {"Accent", "swatchAccent", &Palette::accent},
+        {"Success", "swatchSuccess", &Palette::success},
+        {"Danger", "swatchDanger", &Palette::danger},
+    };
+
+    std::vector<QLabel*> chips;
+    for (const Specimen& specimen : specimens) {
+        auto* chip = paletteSwatch(QString::fromUtf8(specimen.caption),
+                                   QString::fromUtf8(specimen.role), preview);
+        chip->setProperty("paletteEntry", QString::fromUtf8(specimen.caption));
+        previewRow->addWidget(chip);
+        chips.push_back(chip);
+    }
     previewRow->addStretch(1);
+
+    // The chips repaint themselves from the sheet; only the hex in the tooltip has to be told
+    // that the palette underneath it changed.
+    const auto retintTooltips = [chips, specimens]() {
+        const Palette& live = ThemeManager::instance().palette();
+        for (std::size_t i = 0; i < chips.size(); ++i) {
+            const QColor colour = live.*(specimens[i].entry);
+            chips[i]->setToolTip(QStringLiteral("%1 · %2")
+                                     .arg(QString::fromUtf8(specimens[i].caption),
+                                          colour.name(QColor::HexRgb).toUpper()));
+        }
+    };
+    retintTooltips();
+    connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, retintTooltips);
+
     themeRow->addWidget(preview, 1);
 
     themeColumn->addLayout(themeRow);
@@ -517,6 +569,29 @@ void SettingsPage::refresh() {
                 item->setSizeHint(QSize(0, 58));
             }
             m_backups->setCurrentRow(0);
+        }
+
+        // Size the list to a whole number of rows. A viewport that happens to end mid-row leaves a
+        // sliced row against the bottom edge of the card, which reads as a clipping fault rather
+        // than as "there is more below". The pitch is measured from the delegate and the frame
+        // inset from the live geometry, so this stays correct if the sheet's metrics change; the
+        // floor on the inset means an unlaid-out page can only ever over-allocate, never clip.
+        if (!backups.empty()) {
+            const int wanted = std::min<int>(4, m_backups->count());
+            QTimer::singleShot(0, this, [this, wanted]() {
+                const int pitch = m_backups->sizeHintForRow(0);
+                if (pitch <= 0) {
+                    return;
+                }
+                // The frame inset is a property of the sheet (padding), not of the current size,
+                // so it reads correctly even before the page has been laid out; the bounds are
+                // only a guard against a degenerate geometry.
+                int inset = m_backups->height() - m_backups->viewport()->height();
+                if (inset < 0 || inset > 48) {
+                    inset = 12;
+                }
+                m_backups->setFixedHeight(wanted * pitch + inset);
+            });
         }
     } catch (const std::exception& e) {
         auto* placeholder = new QListWidgetItem(QString::fromUtf8(e.what()), m_backups);

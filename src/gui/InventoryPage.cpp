@@ -17,6 +17,7 @@
 #include "aluchop/gui/InventoryPage.hpp"
 
 #include <algorithm>
+#include <initializer_list>
 #include <memory>
 #include <tuple>
 #include <vector>
@@ -34,6 +35,7 @@
 #include <QEasingCurve>
 #include <QEvent>
 #include <QFont>
+#include <QFontMetrics>
 #include <QFormLayout>
 #include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
@@ -79,7 +81,41 @@ constexpr int kPageSpacing = 18;
 constexpr int kPanelPad = 18;
 constexpr int kControlH = 38;
 constexpr int kFadeMs = 220;
+constexpr int kRowH = 44;       ///< the house row height, used to size panels in whole rows
+constexpr int kShelfRowH = 40;  ///< the shelf's own row height — 12 lines of stock beat 9 of air
+constexpr int kLedgerRowH = 38;   ///< the movement ledger's row height
+constexpr int kSupplierRowH = 52; ///< two stacked lines of contact detail need the extra room
+constexpr int kAlertRowH = 34;  ///< the alert list's own row height
 constexpr int kExpiryHorizonDays = 7;  ///< matches InventoryService::expiring()'s default
+
+// --- shelf table columns ---------------------------------------------------------------------
+// The reorder level used to have a column of its own. It cost the ingredient and supplier names
+// ~80 px between them and said nothing the row was not already saying three other ways: the
+// Status word, the stock cell's tooltip (which draws the fill gauge against it) and the Alerts
+// panel, which spells out "reorder at 1.00" in words.
+constexpr int kColIngredient = 0;
+constexpr int kColInStore = 1;
+constexpr int kColExpiry = 2;
+constexpr int kColSupplier = 3;
+constexpr int kColStatus = 4;
+
+// --- the two faces of the bottom-right panel --------------------------------------------------
+constexpr int kTabSuppliers = 0;
+constexpr int kTabLedger = 1;
+
+// --- supplier table columns ------------------------------------------------------------------
+// A phone number and an e-mail address are one fact — how to reach these people — and split into
+// two columns of a side panel neither of them, nor the name beside them, could be printed in
+// full. Stacked in a single cell all three fit with room to spare.
+constexpr int kSupName = 0;
+constexpr int kSupContact = 1;
+
+/// Widest the shelf's supplier column may grow to before the ingredient name starts paying for
+/// it, and the narrowest it may shrink to. See fitSupplierColumn().
+constexpr int kSupplierColMin = 130;
+constexpr int kSupplierColMax = 240;
+/// The shelf's identity column never yields below this, whatever the supplier names want.
+constexpr int kIngredientColFloor = 170;
 
 /// @return the live palette; every colour on this screen is read from here, never literal hex.
 const Palette& theme() { return ThemeManager::instance().palette(); }
@@ -128,6 +164,35 @@ void styleChip(QLabel* chip, const QColor& accentColour) {
                             .arg(accentColour.green())
                             .arg(accentColour.blue())
                             .arg(accentColour.name()));
+}
+
+/// @brief Paints one half of the Suppliers / Usage-history segmented control.
+///
+/// Both halves are ordinary check-able buttons; the sheet has no `:checked` rule for a push
+/// button, so the selected state is painted here from the live palette — which means it is
+/// re-applied on every refresh() and therefore survives a Light/Dark switch.
+///
+/// @param button the segment.
+/// @param active true when this segment's page is the one on show.
+void styleSegment(QPushButton* button, bool active) {
+    const Palette& p = theme();
+    const QColor tint = p.primary;
+    button->setStyleSheet(
+        active ? QStringLiteral("QPushButton { background-color: rgba(%1,%2,%3,16%);"
+                                " border: 1px solid rgba(%1,%2,%3,45%); border-radius: 9px;"
+                                " padding: 4px 12px; color: %4; font-weight: 700; }")
+                     .arg(tint.red())
+                     .arg(tint.green())
+                     .arg(tint.blue())
+                     .arg(p.text.name())
+               : QStringLiteral("QPushButton { background: transparent;"
+                                " border: 1px solid transparent; border-radius: 9px;"
+                                " padding: 4px 12px; color: %1; font-weight: 600; }"
+                                "QPushButton:hover { background-color: rgba(%2,%3,%4,10%); }")
+                     .arg(p.textMuted.name())
+                     .arg(tint.red())
+                     .arg(tint.green())
+                     .arg(tint.blue()));
 }
 
 /// @brief Table cell that sorts on a numeric key while displaying formatted text.
@@ -197,6 +262,230 @@ protected:
 private:
     QWidget* m_target;
     bool m_played = false;
+};
+
+/// @brief Gives a table a column policy that cannot starve its identity column.
+///
+/// The Qt default is a trap. `ElegantTable` turns on `stretchLastSection`, so the LAST column
+/// swallows every spare pixel while a `Stretch` column earlier in the table is squeezed down to
+/// the header's minimum section size — which is how "Ingredient" ended up narrower than its own
+/// caption, painted its caption over the next section, and showed names as "Yog…".
+///
+/// The policy applied here is: columns whose text is bounded (a quantity, a date, a status word)
+/// size to their content; the one or two columns holding free text share whatever is left; and no
+/// section may shrink below @p minSection, so a column can never collapse to nothing.
+///
+/// @param table          the table to configure.
+/// @param stretchColumns the free-text columns that absorb the spare width.
+/// @param minSection     narrowest any column may become, in pixels.
+void configureColumns(QTableWidget* table, std::initializer_list<int> stretchColumns,
+                      int minSection = 76) {
+    QHeaderView* head = table->horizontalHeader();
+    head->setStretchLastSection(false);
+    head->setMinimumSectionSize(minSection);
+    for (int column = 0; column < table->columnCount(); ++column) {
+        const bool stretch =
+            std::find(stretchColumns.begin(), stretchColumns.end(), column) !=
+            stretchColumns.end();
+        head->setSectionResizeMode(column, stretch ? QHeaderView::Stretch
+                                                   : QHeaderView::ResizeToContents);
+    }
+    table->setTextElideMode(Qt::ElideRight);
+    table->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+}
+
+/// @brief Sizes the shelf's supplier column to the names actually in it.
+///
+/// Both free-text columns cannot simply be `Stretch`: Qt splits the spare width evenly, which
+/// gave the supplier exactly as much room as the ingredient and left both a few pixels short of
+/// their longest entry. `ResizeToContents` on the supplier is not safe either — one absurdly
+/// long trading name would starve the ingredient column.
+///
+/// So the supplier column is measured against the text it is actually holding and clamped: it
+/// takes what it needs between @ref kSupplierColMin and @ref kSupplierColMax, and the ingredient
+/// name — the identity of the row — keeps everything else and grows with the window.
+///
+/// @param table the shelf.
+/// @param column the supplier column.
+void fitSupplierColumn(QTableWidget* table, int column) {
+    const int viewport = table->viewport()->width();
+    if (viewport < 120) return;  // not laid out yet; refresh() will come back
+
+    const QFontMetrics metrics(table->font());
+    int widest = 0;
+    for (int row = 0; row < table->rowCount(); ++row) {
+        if (const QTableWidgetItem* cell = table->item(row, column)) {
+            widest = std::max(widest, metrics.horizontalAdvance(cell->text()));
+        }
+    }
+    const QTableWidgetItem* caption = table->horizontalHeaderItem(column);
+    const int header = caption ? metrics.horizontalAdvance(caption->text()) + 16 : 0;
+    const int padding = 26;  // QSS gives every cell 12 px either side
+    int wanted = std::clamp(std::max(widest + padding, header), kSupplierColMin, kSupplierColMax);
+
+    // What the two free-text columns have to share, measured from the live header rather than
+    // assumed: on a narrow window the fixed columns take more of the table than they do on a
+    // wide one, and a supplier column sized in a vacuum starved the ingredient name down to the
+    // header's minimum and put a horizontal scroll bar under the shelf.
+    int fixed = 0;
+    for (int other = 0; other < table->columnCount(); ++other) {
+        if (other != column && other != kColIngredient) fixed += table->columnWidth(other);
+    }
+    const int shared = viewport - fixed;
+    if (shared - wanted < kIngredientColFloor) {
+        wanted = std::max(kSupplierColMin, shared - kIngredientColFloor);
+    }
+    table->horizontalHeader()->resizeSection(column, wanted);
+}
+
+/// @brief Re-runs a table's column fit whenever the table itself is resized.
+///
+/// The fit depends on how wide the table is, and the window is resizable, so doing it only when
+/// the data changes leaves the columns sized for a window that no longer exists.
+///
+/// @oop-concept Method Overriding :: QObject::eventFilter is overridden to react to another
+///              widget's resize without subclassing that widget
+class ColumnFitter : public QObject {
+public:
+    /// @param table the table to keep fitted; also the Qt parent.
+    /// @param column the measured column.
+    ColumnFitter(QTableWidget* table, int column)
+        : QObject(table), m_table(table), m_column(column) {
+        table->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (watched == m_table &&
+            (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
+            fitSupplierColumn(m_table, m_column);
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    QTableWidget* m_table;
+    int m_column;
+};
+
+/// @brief Wraps an empty-state so a stacked page cannot stretch it into a dashed rectangle the
+///        size of the whole card.
+///
+/// A QStackedWidget hands its current page the entire panel, which turned "no movements yet" into
+/// a hollow box the height of the card. Centred inside a plain page it stays the size of the
+/// sentence it is actually saying, and the rest of the panel reads as quiet surface.
+///
+/// @param empty the placeholder (also re-parented by the layout).
+/// @param parent the widget the page belongs to.
+/// @return the page to add to the stack.
+QWidget* centredPage(EmptyState* empty, QWidget* parent) {
+    empty->setMaximumWidth(420);
+    auto* page = new QWidget(parent);
+    auto* column = new QVBoxLayout(page);
+    column->setContentsMargins(0, 0, 0, 0);
+    column->addStretch(1);
+    column->addWidget(empty, 0, Qt::AlignHCenter);
+    column->addStretch(1);
+    return page;
+}
+
+/// @return the empty-state inside a page built by centredPage(). EmptyState is deliberately
+///         meta-object-free, so it is found by its style objectName and then downcast.
+EmptyState* emptyStateIn(QWidget* page) {
+    return page ? dynamic_cast<EmptyState*>(page->findChild<QFrame*>(
+                      QStringLiteral("emptyState")))
+                : nullptr;
+}
+
+/// @brief Repeats a cell's own text as its tooltip, so an elided cell is never lost data.
+/// @param cell the cell to annotate; a richer @p detail wins over the plain text.
+QTableWidgetItem* withTooltip(QTableWidgetItem* cell, const QString& detail = QString()) {
+    cell->setToolTip(detail.isEmpty() ? cell->text() : detail);
+    return cell;
+}
+
+/// @brief Keeps a table an exact number of whole rows tall.
+///
+/// A panel hands its table whatever height is left over, which is almost never a whole multiple
+/// of the row height — so the bottom row was drawn sliced through the middle. Capping the table
+/// at `header + n · rowHeight` turns those leftover pixels into bottom padding inside the card,
+/// which reads as deliberate space instead of a clipped row. The height is measured from the
+/// container the layout actually resizes, never from the (capped) table, so the table still grows
+/// when the window does.
+///
+/// @oop-concept Method Overriding :: QObject::eventFilter is overridden to react to another
+///              widget's resize without subclassing that widget
+class WholeRowFitter : public QObject {
+public:
+    /// @param table the table to snap.
+    /// @param container the widget the layout resizes (the table's stack); also the Qt parent.
+    WholeRowFitter(QTableWidget* table, QWidget* container)
+        : QObject(container), m_table(table), m_container(container) {
+        container->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (watched == m_container &&
+            (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
+            snap();
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    void snap() {
+        const int rowH = m_table->verticalHeader()->defaultSectionSize();
+        const int headH = m_table->horizontalHeader()->sizeHint().height();
+        const int available = m_container->height() - headH;
+        if (rowH <= 0 || available < rowH) return;
+        const int target = headH + (available / rowH) * rowH;
+        if (m_table->maximumHeight() != target) m_table->setMaximumHeight(target);
+    }
+
+    QTableWidget* m_table;
+    QWidget* m_container;
+};
+
+/// @brief The same whole-row rule for the alert feed, which is a list rather than a table.
+///
+/// The chrome (the list's own padding) is measured from the live widget rather than assumed, so
+/// it stays correct if the stylesheet's padding ever changes.
+class WholeItemFitter : public QObject {
+public:
+    /// @param list the alert list to snap.
+    /// @param container the widget the layout resizes; also the Qt parent.
+    /// @param itemHeight the height every entry in this list is given.
+    WholeItemFitter(QListWidget* list, QWidget* container, int itemHeight)
+        : QObject(container), m_list(list), m_container(container), m_itemHeight(itemHeight) {
+        container->installEventFilter(this);
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (watched == m_container &&
+            (event->type() == QEvent::Resize || event->type() == QEvent::Show)) {
+            snap();
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    void snap() {
+        // The item height is known up front rather than read from the model: the list is empty
+        // for as long as it takes refresh() to fill it, and the panel is laid out before that.
+        const int step = m_itemHeight + 2 * m_list->spacing();
+        if (m_list->viewport()->height() <= 0) return;
+        const int chrome = m_list->height() - m_list->viewport()->height();
+        const int available = m_container->height() - chrome;
+        if (step <= 0 || available < step) return;
+        const int target = chrome + (available / step) * step;
+        if (m_list->maximumHeight() != target) m_list->setMaximumHeight(target);
+    }
+
+    QListWidget* m_list;
+    QWidget* m_container;
+    int m_itemHeight;
 };
 
 void beginRepopulate(QTableWidget* table) {
@@ -274,6 +563,17 @@ QString labelFor(StockState state) {
     return QStringLiteral("In stock");
 }
 
+/// @return the movement reason in English. The ledger stores a closed set of tokens
+///         (`RESTOCK`, `USAGE`, `WASTE`, `ADJUST`); anything else is shown verbatim rather
+///         than swallowed.
+QString reasonLabel(const QString& reason) {
+    if (reason == QLatin1String("RESTOCK")) return QStringLiteral("Delivery");
+    if (reason == QLatin1String("USAGE")) return QStringLiteral("Recipe usage");
+    if (reason == QLatin1String("WASTE")) return QStringLiteral("Written off");
+    if (reason == QLatin1String("ADJUST")) return QStringLiteral("Adjustment");
+    return reason;
+}
+
 /// @brief Eight-segment gauge of stock against its reorder level.
 /// @param stock current quantity.
 /// @param threshold reorder level; a full bar is twice the reorder level.
@@ -290,12 +590,6 @@ QString levelGauge(double stock, double threshold) {
         bar += (i < filled) ? QStringLiteral("▰") : QStringLiteral("▱");
     }
     return bar;
-}
-
-/// @return the fraction of a full shelf @p stock represents, used as the gauge's sort key.
-double levelRatio(double stock, double threshold) {
-    const double full = threshold > 0.0 ? threshold * 2.0 : std::max(stock, 1.0);
-    return full > 0.0 ? stock / full : 0.0;
 }
 
 /// @brief Formats a physical quantity. Quantities are `double` on purpose — they are kitchen
@@ -383,10 +677,11 @@ InventoryPage::InventoryPage(services::AppContext& ctx, QWidget* parent) : Page(
     auto* body = new QHBoxLayout;
     body->setSpacing(kPageSpacing);
 
-    // Left column: the shelf, then the ledger of the selected line -------------------------
-    auto* leftColumn = new QVBoxLayout;
-    leftColumn->setSpacing(kPageSpacing);
-
+    // Left column: the shelf, and nothing else -------------------------------------------------
+    // The shelf is the point of this screen, so the store room owns the full height of its
+    // column: a dozen lines of real stock instead of five lines above a panel of air. The
+    // movement ledger that used to sit under it now shares the bottom-right panel with the
+    // supplier book, where it costs the shelf nothing.
     auto* shelfPanel = new GlassPanel(this);
     auto* shelfCol = new QVBoxLayout(shelfPanel);
     shelfCol->setContentsMargins(kPanelPad, kPanelPad, kPanelPad, kPanelPad);
@@ -396,7 +691,17 @@ InventoryPage::InventoryPage(services::AppContext& ctx, QWidget* parent) : Page(
     shelfHead->setSpacing(10);
     shelfHead->addWidget(makeLabel(QStringLiteral("Store room"), QStringLiteral("sectionTitle"),
                                    shelfPanel, 13, QFont::DemiBold));
-    shelfHead->addStretch(1);
+
+    // The filter rides in the panel's own toolbar rather than on a line of its own: a row of
+    // chrome across the whole card was costing the shelf a row and a half of stock.
+    auto* search = new SearchBar(QStringLiteral("Filter by name, unit or supplier…"), shelfPanel);
+    search->setObjectName(QStringLiteral("searchBar"));
+    search->setProperty("aluchopRole", QStringLiteral("inventorySearch"));
+    search->setMinimumHeight(kControlH);
+    search->setMinimumWidth(220);
+    search->setMaximumWidth(360);
+    shelfHead->addWidget(search, 1);
+
     auto* lowChip = makeChip(QStringLiteral("—"), shelfPanel);
     lowChip->setObjectName(QStringLiteral("inventoryLowChip"));
     auto* expiryChip = makeChip(QStringLiteral("—"), shelfPanel);
@@ -405,24 +710,23 @@ InventoryPage::InventoryPage(services::AppContext& ctx, QWidget* parent) : Page(
     shelfHead->addWidget(expiryChip);
     shelfCol->addLayout(shelfHead);
 
-    auto* search = new SearchBar(QStringLiteral("Filter ingredients by name, unit or supplier…"),
-                                 shelfPanel);
-    search->setObjectName(QStringLiteral("searchBar"));
-    search->setProperty("aluchopRole", QStringLiteral("inventorySearch"));
-    search->setMinimumHeight(kControlH);
-    shelfCol->addWidget(search);
-
+    // Quantity and unit are one fact ("15.00 kg"), and the fill gauge lives in that cell's
+    // tooltip: columns of chrome were costing the ingredient name the width it needed.
     m_ingredients = new ElegantTable(
-        QStringList{QStringLiteral("Ingredient"), QStringLiteral("Level"), QStringLiteral("Stock"),
-                    QStringLiteral("Unit"), QStringLiteral("Reorder at"), QStringLiteral("Expiry"),
-                    QStringLiteral("Supplier"), QStringLiteral("Status")},
+        QStringList{QStringLiteral("Ingredient"), QStringLiteral("In store"),
+                    QStringLiteral("Expiry"), QStringLiteral("Supplier"),
+                    QStringLiteral("Status")},
         shelfPanel);
-    m_ingredients->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int column = 1; column <= 7; ++column) {
-        m_ingredients->horizontalHeader()->setSectionResizeMode(column,
-                                                                QHeaderView::ResizeToContents);
-    }
-    m_ingredients->setMinimumWidth(620);
+    m_ingredients->verticalHeader()->setDefaultSectionSize(kShelfRowH);
+    configureColumns(m_ingredients, {kColIngredient});
+    // The supplier is measured against its own names once the shelf is filled (fitSupplierColumn);
+    // the ingredient name keeps the rest and is the column that grows with the window.
+    m_ingredients->horizontalHeader()->setSectionResizeMode(kColSupplier,
+                                                            QHeaderView::Interactive);
+    m_ingredients->setMinimumWidth(560);
+    // A→Z, not Z→A: the header's default indicator had the store room opening on "Yoghurt".
+    m_ingredients->sortByColumn(kColIngredient, Qt::AscendingOrder);
+    new ColumnFitter(m_ingredients, kColSupplier);
 
     auto* shelfEmpty =
         new EmptyState(QStringLiteral("The store room is empty"),
@@ -435,49 +739,12 @@ InventoryPage::InventoryPage(services::AppContext& ctx, QWidget* parent) : Page(
     auto* shelfStack = new QStackedWidget(shelfPanel);
     shelfStack->setObjectName(QStringLiteral("inventoryShelfStack"));
     shelfStack->addWidget(m_ingredients);
-    shelfStack->addWidget(shelfEmpty);
+    shelfStack->addWidget(centredPage(shelfEmpty, shelfPanel));
+    // Enough height for whole rows rather than a shelf sliced through its last line.
+    shelfStack->setMinimumHeight(6 * kShelfRowH);
+    new WholeRowFitter(m_ingredients, shelfStack);
     shelfCol->addWidget(shelfStack, 1);
-    leftColumn->addWidget(shelfPanel, 3);
-
-    auto* ledgerPanel = new GlassPanel(this);
-    auto* ledgerCol = new QVBoxLayout(ledgerPanel);
-    ledgerCol->setContentsMargins(kPanelPad, kPanelPad, kPanelPad, kPanelPad);
-    ledgerCol->setSpacing(12);
-
-    auto* ledgerHead = new QHBoxLayout;
-    ledgerHead->setSpacing(10);
-    ledgerHead->addWidget(makeLabel(QStringLiteral("Usage history"),
-                                    QStringLiteral("sectionTitle"), ledgerPanel, 13,
-                                    QFont::DemiBold));
-    auto* ledgerWho = makeLabel(QString(), QStringLiteral("mutedLabel"), ledgerPanel, 11);
-    ledgerWho->setObjectName(QStringLiteral("inventoryLedgerWho"));
-    ledgerHead->addWidget(ledgerWho);
-    ledgerHead->addStretch(1);
-    ledgerCol->addLayout(ledgerHead);
-
-    auto* ledger = new ElegantTable(
-        QStringList{QStringLiteral("When"), QStringLiteral("Movement"), QStringLiteral("Reason"),
-                    QStringLiteral("Note")},
-        ledgerPanel);
-    ledger->setObjectName(QStringLiteral("inventoryLedger"));
-    ledger->setSortingEnabled(false);
-    ledger->verticalHeader()->setDefaultSectionSize(36);
-    ledger->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    ledger->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    ledger->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    ledger->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
-
-    auto* ledgerEmpty = new EmptyState(QStringLiteral("No movements yet"),
-                                       QStringLiteral("Deliveries, waste and recipe usage all "
-                                                      "appear here."),
-                                       ledgerPanel);
-    auto* ledgerStack = new QStackedWidget(ledgerPanel);
-    ledgerStack->setObjectName(QStringLiteral("inventoryLedgerStack"));
-    ledgerStack->addWidget(ledger);
-    ledgerStack->addWidget(ledgerEmpty);
-    ledgerCol->addWidget(ledgerStack, 1);
-    leftColumn->addWidget(ledgerPanel, 2);
-    body->addLayout(leftColumn, 3);
+    body->addWidget(shelfPanel, 2);
 
     // Right column: alerts, then suppliers ---------------------------------------------------
     auto* rightColumn = new QVBoxLayout;
@@ -488,11 +755,16 @@ InventoryPage::InventoryPage(services::AppContext& ctx, QWidget* parent) : Page(
     auto* alertCol = new QVBoxLayout(alertPanel);
     alertCol->setContentsMargins(kPanelPad, kPanelPad, kPanelPad, kPanelPad);
     alertCol->setSpacing(12);
-    alertCol->addWidget(makeLabel(QStringLiteral("Alerts"), QStringLiteral("sectionTitle"),
-                                  alertPanel, 13, QFont::DemiBold));
-    alertCol->addWidget(makeLabel(QStringLiteral("Anything at or below its reorder level, plus "
-                                                 "anything expiring inside a week."),
-                                  QStringLiteral("mutedLabel"), alertPanel, 11));
+    // The rule this panel applies rides on the same line as its title. As a paragraph of its own
+    // it cost two lines of height — and it was buying that height from the alerts themselves.
+    auto* alertHead = new QHBoxLayout;
+    alertHead->setSpacing(8);
+    alertHead->addWidget(makeLabel(QStringLiteral("Alerts"), QStringLiteral("sectionTitle"),
+                                   alertPanel, 13, QFont::DemiBold));
+    alertHead->addWidget(makeLabel(QStringLiteral("· at or below reorder, or expiring in 7 days"),
+                                   QStringLiteral("mutedLabel"), alertPanel, 11));
+    alertHead->addStretch(1);
+    alertCol->addLayout(alertHead);
 
     m_alerts = new QListWidget(alertPanel);
     m_alerts->setObjectName(QStringLiteral("inventoryAlerts"));
@@ -509,56 +781,128 @@ InventoryPage::InventoryPage(services::AppContext& ctx, QWidget* parent) : Page(
     auto* alertStack = new QStackedWidget(alertPanel);
     alertStack->setObjectName(QStringLiteral("inventoryAlertStack"));
     alertStack->addWidget(m_alerts);
-    alertStack->addWidget(alertEmpty);
+    alertStack->addWidget(centredPage(alertEmpty, alertPanel));
+    alertStack->setMinimumHeight(5 * kAlertRowH);
+    new WholeItemFitter(m_alerts, alertStack, kAlertRowH);
     alertCol->addWidget(alertStack, 1);
-    rightColumn->addWidget(alertPanel, 1);
+    rightColumn->addWidget(alertPanel, 4);
 
-    auto* supplierPanel = new GlassPanel(this);
-    auto* supplierCol = new QVBoxLayout(supplierPanel);
-    supplierCol->setContentsMargins(kPanelPad, kPanelPad, kPanelPad, kPanelPad);
-    supplierCol->setSpacing(12);
+    // One panel, two faces: the supplier book and the movement ledger of whatever line is
+    // selected on the shelf. Both are reference material for the shelf rather than rivals to it,
+    // they want exactly the same footprint, and only one of them is ever being read at a time —
+    // so they share a segmented panel instead of each demanding a card of its own.
+    auto* detailPanel = new GlassPanel(this);
+    auto* detailCol = new QVBoxLayout(detailPanel);
+    detailCol->setContentsMargins(kPanelPad, kPanelPad, kPanelPad, kPanelPad);
+    detailCol->setSpacing(12);
 
-    auto* supplierHead = new QHBoxLayout;
-    supplierHead->setSpacing(8);
-    supplierHead->addWidget(makeLabel(QStringLiteral("Suppliers"),
-                                      QStringLiteral("sectionTitle"), supplierPanel, 13,
-                                      QFont::DemiBold));
-    supplierHead->addStretch(1);
+    auto* detailHead = new QHBoxLayout;
+    detailHead->setSpacing(6);
+    auto* segSuppliers = makeButton(QStringLiteral("Suppliers"), QString(), detailPanel);
+    auto* segLedger = makeButton(QStringLiteral("Usage history"), QString(), detailPanel);
+    for (QPushButton* segment : {segSuppliers, segLedger}) {
+        segment->setCheckable(true);
+        segment->setMinimumHeight(30);
+        segment->setMaximumHeight(30);
+        segment->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    }
+    segSuppliers->setProperty("aluchopRole", QStringLiteral("inventorySegSuppliers"));
+    segLedger->setProperty("aluchopRole", QStringLiteral("inventorySegLedger"));
+    segLedger->setToolTip(QStringLiteral("Every delivery, write-off and recipe deduction against "
+                                         "the selected ingredient."));
+    detailHead->addWidget(segSuppliers);
+    detailHead->addWidget(segLedger);
+
+    auto* ledgerWho = makeLabel(QString(), QStringLiteral("mutedLabel"), detailPanel, 11);
+    ledgerWho->setObjectName(QStringLiteral("inventoryLedgerWho"));
+    detailHead->addWidget(ledgerWho, 1);
+    detailHead->addStretch(1);
+
     auto* editSupplierBtn = makeButton(QStringLiteral("Edit"), QStringLiteral("ghostButton"),
-                                       supplierPanel);
+                                       detailPanel);
     auto* addSupplierBtn = makeButton(QStringLiteral("＋"), QStringLiteral("ghostButton"),
-                                      supplierPanel);
+                                      detailPanel);
     addSupplierBtn->setToolTip(QStringLiteral("Add a supplier"));
-    supplierHead->addWidget(editSupplierBtn);
-    supplierHead->addWidget(addSupplierBtn);
-    supplierCol->addLayout(supplierHead);
+    for (QPushButton* action : {editSupplierBtn, addSupplierBtn}) {
+        action->setMinimumHeight(30);
+        action->setMaximumHeight(30);
+    }
+    editSupplierBtn->setProperty("aluchopRole", QStringLiteral("inventorySupplierAction"));
+    addSupplierBtn->setProperty("aluchopRole", QStringLiteral("inventorySupplierAction"));
+    detailHead->addWidget(editSupplierBtn);
+    detailHead->addWidget(addSupplierBtn);
+    detailCol->addLayout(detailHead);
 
+    // This panel is a side column, not a page: four columns of contact detail could not all be
+    // legible in it, and the previous split left the *name* with zero width. Who they are, how to
+    // ring them and how to write to them are on screen; the postal address rides on the row's
+    // tooltip and is edited in the supplier dialog.
     m_suppliers = new ElegantTable(
-        QStringList{QStringLiteral("Name"), QStringLiteral("Phone"), QStringLiteral("E-mail"),
-                    QStringLiteral("Address")},
-        supplierPanel);
-    m_suppliers->verticalHeader()->setDefaultSectionSize(38);
-    m_suppliers->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    m_suppliers->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_suppliers->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    m_suppliers->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
+        QStringList{QStringLiteral("Supplier"), QStringLiteral("Contact")}, detailPanel);
+    // Two lines of contact detail per row: the name is the identity and takes the spare width,
+    // the phone and the e-mail sit under one another and take exactly what they need.
+    m_suppliers->verticalHeader()->setDefaultSectionSize(kSupplierRowH);
+    configureColumns(m_suppliers, {kSupName}, 64);
+    // Without this the delegate draws every cell with Qt::TextSingleLine and the newline between
+    // the phone and the e-mail is silently swallowed into a space.
+    m_suppliers->setWordWrap(true);
+    m_suppliers->sortByColumn(kSupName, Qt::AscendingOrder);
 
     auto* supplierEmpty = new EmptyState(QStringLiteral("No suppliers on file"),
                                          QStringLiteral("Record who you buy from so a low-stock "
                                                         "alert says who to ring."),
-                                         supplierPanel);
+                                         detailPanel);
     QPushButton* emptyAddSupplier =
         supplierEmpty->enableAction(QStringLiteral("Add the first supplier"));
 
-    auto* supplierStack = new QStackedWidget(supplierPanel);
+    auto* supplierStack = new QStackedWidget(detailPanel);
     supplierStack->setObjectName(QStringLiteral("inventorySupplierStack"));
     supplierStack->addWidget(m_suppliers);
-    supplierStack->addWidget(supplierEmpty);
-    supplierCol->addWidget(supplierStack, 1);
-    rightColumn->addWidget(supplierPanel, 1);
+    supplierStack->addWidget(centredPage(supplierEmpty, detailPanel));
+    new WholeRowFitter(m_suppliers, supplierStack);
 
-    body->addLayout(rightColumn, 2);
+    auto* ledger = new ElegantTable(
+        QStringList{QStringLiteral("When"), QStringLiteral("Change"), QStringLiteral("Why")},
+        detailPanel);
+    ledger->setObjectName(QStringLiteral("inventoryLedger"));
+    ledger->setSortingEnabled(false);
+    ledger->verticalHeader()->setDefaultSectionSize(kLedgerRowH);
+    configureColumns(ledger, {2}, 64);
+
+    auto* ledgerEmpty = new EmptyState(QStringLiteral("No ingredient selected"),
+                                       QStringLiteral("Pick a line on the shelf to see every "
+                                                      "delivery, write-off and recipe deduction "
+                                                      "against it."),
+                                       detailPanel);
+    auto* ledgerStack = new QStackedWidget(detailPanel);
+    ledgerStack->setObjectName(QStringLiteral("inventoryLedgerStack"));
+    ledgerStack->addWidget(ledger);
+    ledgerStack->addWidget(centredPage(ledgerEmpty, detailPanel));
+    new WholeRowFitter(ledger, ledgerStack);
+
+    auto* detailStack = new QStackedWidget(detailPanel);
+    detailStack->setObjectName(QStringLiteral("inventoryDetailStack"));
+    detailStack->addWidget(supplierStack);
+    detailStack->addWidget(ledgerStack);
+    detailStack->setMinimumHeight(4 * kRowH);
+    detailCol->addWidget(detailStack, 1);
+    rightColumn->addWidget(detailPanel, 5);
+
+    body->addLayout(rightColumn, 1);
     page->addLayout(body, 1);
+
+    // The panel opens on the supplier book; selecting a line on the shelf turns it over to that
+    // ingredient's ledger, and the two segments switch it back and forth by hand.
+    setProperty("aluchopDetailTab", kTabSuppliers);
+    setProperty("aluchopLedgerOf", 0);
+    connect(segSuppliers, &QPushButton::clicked, this, [this]() {
+        setProperty("aluchopDetailTab", kTabSuppliers);
+        refresh();
+    });
+    connect(segLedger, &QPushButton::clicked, this, [this]() {
+        setProperty("aluchopDetailTab", kTabLedger);
+        refresh();
+    });
 
     // --- wiring -----------------------------------------------------------------------------
     connect(addIngredientBtn, &QPushButton::clicked, this, &InventoryPage::onAddIngredient);
@@ -657,62 +1001,65 @@ void InventoryPage::refresh() {
             QFont nameFont = nameCell->font();
             nameFont.setWeight(QFont::DemiBold);
             nameCell->setFont(nameFont);
-            m_ingredients->setItem(rowIndex, 0, nameCell);
+            m_ingredients->setItem(rowIndex, kColIngredient, withTooltip(nameCell));
 
-            // Visual gauge: stock against twice its reorder level, coloured by urgency.
-            auto* gaugeCell = new SortableCell(levelGauge(item.stockQty(), item.lowThreshold()),
-                                               levelRatio(item.stockQty(), item.lowThreshold()));
-            gaugeCell->setTextAlignment(Qt::AlignCenter);
-            gaugeCell->setForeground(stateColour);
-            gaugeCell->setToolTip(QStringLiteral("%1 %2 in store, reorder at %3 %2")
-                                      .arg(formatQty(item.stockQty()), item.unit(),
-                                           formatQty(item.lowThreshold())));
-            m_ingredients->setItem(rowIndex, 1, gaugeCell);
-
-            auto* stockCell = numberCell(formatQty(item.stockQty()), item.stockQty());
+            // Quantity and unit read as one fact; the fill gauge (stock against twice its reorder
+            // level) is the tooltip, where it costs the name no width.
+            auto* stockCell = numberCell(QStringLiteral("%1 %2")
+                                             .arg(formatQty(item.stockQty()), item.unit()),
+                                         item.stockQty());
             stockCell->setForeground(stateColour);
             QFont stockFont = stockCell->font();
             stockFont.setWeight(QFont::DemiBold);
             stockCell->setFont(stockFont);
-            m_ingredients->setItem(rowIndex, 2, stockCell);
+            stockCell->setToolTip(QStringLiteral("%1\n%2 %3 in store, reorder at %4 %3")
+                                      .arg(levelGauge(item.stockQty(), item.lowThreshold()),
+                                           formatQty(item.stockQty()), item.unit(),
+                                           formatQty(item.lowThreshold())));
+            m_ingredients->setItem(rowIndex, kColInStore, stockCell);
 
-            m_ingredients->setItem(rowIndex, 3, textCell(item.unit()));
-            m_ingredients->setItem(rowIndex, 4,
-                                   numberCell(formatQty(item.lowThreshold()),
-                                              item.lowThreshold()));
-
+            // The date alone is the column; how close it is, is carried by colour and tooltip —
+            // the Alerts panel next to it already says it in words.
             const QDate expiry = item.expiryDate();
             QString expiryText = QStringLiteral("—");
+            QString expiryHint = QStringLiteral("No expiry recorded for this ingredient.");
             double expiryKey = 1.0e12;  // no expiry sorts last
             if (expiry.isValid()) {
                 const qint64 days = QDate::currentDate().daysTo(expiry);
                 expiryKey = static_cast<double>(days);
-                expiryText = expiry.toString(QStringLiteral("dd MMM yyyy"));
-                if (days < 0) {
-                    expiryText += QStringLiteral("  (%1d ago)").arg(-days);
-                } else if (days <= kExpiryHorizonDays) {
-                    expiryText += days == 0 ? QStringLiteral("  (today)")
-                                            : QStringLiteral("  (in %1d)").arg(days);
-                }
+                expiryText = expiry.toString(QStringLiteral("dd MMM yy"));
+                const QString when = days < 0 ? QStringLiteral("Expired %1 day(s) ago.").arg(-days)
+                                    : days == 0 ? QStringLiteral("Expires today.")
+                                                : QStringLiteral("Expires in %1 day(s).").arg(days);
+                // The column prints a two-digit year to leave the names their width; the tooltip
+                // keeps the date whole.
+                expiryHint = QStringLiteral("%1\n%2")
+                                 .arg(expiry.toString(QStringLiteral("dddd, dd MMMM yyyy")), when);
             }
             auto* expiryCell = new SortableCell(expiryText, expiryKey);
             expiryCell->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+            expiryCell->setToolTip(expiryHint);
             if (expiry.isValid() && QDate::currentDate().daysTo(expiry) <= kExpiryHorizonDays) {
                 expiryCell->setForeground(expiry < QDate::currentDate() ? p.danger : p.secondary);
             }
-            m_ingredients->setItem(rowIndex, 5, expiryCell);
+            m_ingredients->setItem(rowIndex, kColExpiry, expiryCell);
 
             auto* supplierCell = textCell(supplierName.isEmpty() ? QStringLiteral("—")
                                                                  : supplierName);
             if (supplierName.isEmpty()) supplierCell->setForeground(p.textMuted);
-            m_ingredients->setItem(rowIndex, 6, supplierCell);
+            m_ingredients->setItem(
+                rowIndex, kColSupplier,
+                withTooltip(supplierCell, supplierName.isEmpty()
+                                              ? QStringLiteral("No supplier on file for %1.")
+                                                    .arg(item.name())
+                                              : supplierName));
 
             auto* statusCell = textCell(labelFor(state));
             statusCell->setForeground(stateColour);
             QFont statusFont = statusCell->font();
             statusFont.setWeight(QFont::DemiBold);
             statusCell->setFont(statusFont);
-            m_ingredients->setItem(rowIndex, 7, statusCell);
+            m_ingredients->setItem(rowIndex, kColStatus, statusCell);
 
             // A whole-row wash makes an urgent line readable at a glance across eight columns.
             if (state != StockState::Healthy) {
@@ -727,10 +1074,11 @@ void InventoryPage::refresh() {
             ++rowIndex;
         }
         endRepopulate(m_ingredients);
+        fitSupplierColumn(m_ingredients, kColSupplier);
 
         if (auto* stack = findChild<QStackedWidget*>(QStringLiteral("inventoryShelfStack"))) {
             stack->setCurrentIndex(rowIndex == 0 ? 1 : 0);
-            if (auto* empty = dynamic_cast<EmptyState*>(stack->widget(1))) {
+            if (auto* empty = emptyStateIn(stack->widget(1))) {
                 if (rowIndex == 0 && !filter.isEmpty()) {
                     empty->setText(QStringLiteral("No ingredient matches “%1”").arg(filter),
                                    QStringLiteral("Clear the filter to see the whole shelf."));
@@ -802,21 +1150,36 @@ void InventoryPage::refresh() {
         int supplierRow = 0;
         for (const models::Supplier& supplier : suppliers) {
             m_suppliers->insertRow(supplierRow);
+
+            // The address does not have a column in a side panel this narrow, so every cell in
+            // the row carries the full record: nothing on file is unreachable.
+            QStringList card{supplier.name()};
+            if (!supplier.phone().isEmpty()) card << supplier.phone();
+            if (!supplier.email().isEmpty()) card << supplier.email();
+            card << (supplier.address().isEmpty() ? QStringLiteral("No address on file")
+                                                  : supplier.address());
+            const QString fullRecord = card.join(QStringLiteral("\n"));
+
             auto* nameCell = textCell(supplier.name());
             nameCell->setData(Qt::UserRole, supplier.id());
             QFont nameFont = nameCell->font();
             nameFont.setWeight(QFont::DemiBold);
             nameCell->setFont(nameFont);
-            m_suppliers->setItem(supplierRow, 0, nameCell);
-            m_suppliers->setItem(supplierRow, 1,
-                                 textCell(supplier.phone().isEmpty() ? QStringLiteral("—")
-                                                                     : supplier.phone()));
-            m_suppliers->setItem(supplierRow, 2,
-                                 textCell(supplier.email().isEmpty() ? QStringLiteral("—")
-                                                                     : supplier.email()));
-            m_suppliers->setItem(supplierRow, 3,
-                                 textCell(supplier.address().isEmpty() ? QStringLiteral("—")
-                                                                       : supplier.address()));
+            m_suppliers->setItem(supplierRow, kSupName, withTooltip(nameCell, fullRecord));
+
+            // Contact details are secondary to the name and have a fixed shape, so they are set
+            // one step down in size and stacked. That is what buys the name enough width to
+            // print in full inside a side panel instead of ending in an ellipsis.
+            QStringList lines;
+            if (!supplier.phone().isEmpty()) lines << supplier.phone();
+            if (!supplier.email().isEmpty()) lines << supplier.email();
+            if (lines.isEmpty()) lines << QStringLiteral("No contact details on file");
+            auto* contactCell = textCell(lines.join(QStringLiteral("\n")));
+            QFont contactFont = contactCell->font();
+            contactFont.setPointSize(11);
+            contactCell->setFont(contactFont);
+            contactCell->setForeground(p.textMuted);
+            m_suppliers->setItem(supplierRow, kSupContact, withTooltip(contactCell, fullRecord));
             ++supplierRow;
         }
         endRepopulate(m_suppliers);
@@ -843,10 +1206,10 @@ void InventoryPage::refresh() {
         if (ledger) {
             beginRepopulate(ledger);
             if (ingredientId == 0) {
-                if (ledgerWho) ledgerWho->setText(QStringLiteral("— select an ingredient"));
+                if (ledgerWho) ledgerWho->setText(QString());
                 if (ledgerStack) {
                     ledgerStack->setCurrentIndex(1);
-                    if (auto* empty = dynamic_cast<EmptyState*>(ledgerStack->widget(1))) {
+                    if (auto* empty = emptyStateIn(ledgerStack->widget(1))) {
                         empty->setText(QStringLiteral("No ingredient selected"),
                                        QStringLiteral("Pick a line on the shelf to see every "
                                                       "delivery, write-off and recipe "
@@ -887,16 +1250,20 @@ void InventoryPage::refresh() {
                     deltaCell->setForeground(delta >= 0 ? p.success : p.danger);
                     ledger->setItem(ledgerRow, 1, deltaCell);
 
-                    auto* reasonCell = textCell(reason);
-                    reasonCell->setForeground(p.textMuted);
-                    ledger->setItem(ledgerRow, 2, reasonCell);
-                    ledger->setItem(ledgerRow, 3,
-                                    textCell(note.isEmpty() ? QStringLiteral("—") : note));
+                    // Why it moved and what was written against it are one sentence, not two
+                    // columns: split across a side panel neither of them could be read.
+                    const QString why = note.isEmpty()
+                                            ? reasonLabel(reason)
+                                            : QStringLiteral("%1  ·  %2")
+                                                  .arg(reasonLabel(reason), note);
+                    auto* whyCell = textCell(why);
+                    whyCell->setForeground(p.textMuted);
+                    ledger->setItem(ledgerRow, 2, withTooltip(whyCell));
                     ++ledgerRow;
                 }
                 if (ledgerStack) {
                     ledgerStack->setCurrentIndex(ledgerRow == 0 ? 1 : 0);
-                    if (auto* empty = dynamic_cast<EmptyState*>(ledgerStack->widget(1))) {
+                    if (auto* empty = emptyStateIn(ledgerStack->widget(1))) {
                         empty->setText(QStringLiteral("No movements for %1").arg(ingredientName),
                                        QStringLiteral("Restock it, or serve an order whose "
                                                       "recipe uses it."));
@@ -905,13 +1272,47 @@ void InventoryPage::refresh() {
             }
         }
 
+        // --- which face of the bottom-right panel is showing ------------------------------------
+        // Selecting a different line on the shelf turns the panel over to that ingredient's
+        // ledger — including when the selection came from clicking an alert — while an explicit
+        // click on a segment always wins for as long as the selection stands.
+        const int lastLedgerOf = property("aluchopLedgerOf").toInt();
+        if (ingredientId != lastLedgerOf) {
+            setProperty("aluchopLedgerOf", ingredientId);
+            setProperty("aluchopDetailTab", ingredientId == 0 ? kTabSuppliers : kTabLedger);
+        }
+        const int detailTab = property("aluchopDetailTab").toInt();
+        if (auto* stack = findChild<QStackedWidget*>(QStringLiteral("inventoryDetailStack"))) {
+            stack->setCurrentIndex(detailTab);
+        }
+        for (QPushButton* button : findChildren<QPushButton*>()) {
+            const QString role = button->property("aluchopRole").toString();
+            if (role == QLatin1String("inventorySegSuppliers")) {
+                button->setChecked(detailTab == kTabSuppliers);
+                styleSegment(button, detailTab == kTabSuppliers);
+            } else if (role == QLatin1String("inventorySegLedger")) {
+                button->setChecked(detailTab == kTabLedger);
+                styleSegment(button, detailTab == kTabLedger);
+            } else if (role == QLatin1String("inventorySupplierAction")) {
+                // Edit / ＋ belong to the supplier book; they say nothing about a ledger.
+                button->setVisible(detailTab == kTabSuppliers);
+            }
+        }
+        if (ledgerWho) ledgerWho->setVisible(detailTab == kTabLedger && ingredientId != 0);
+
         // --- header subtitle --------------------------------------------------------------------
+        // When a filter is on, the count of rows on screen leads: a subtitle that still says
+        // "157 ingredients" over a shelf showing twelve is a screen arguing with itself.
+        const QString shelfCount =
+            filter.isEmpty()
+                ? QStringLiteral("%1 ingredient%2")
+                      .arg(everything.size())
+                      .arg(everything.size() == 1 ? QString() : QStringLiteral("s"))
+                : QStringLiteral("%1 of %2 ingredients").arg(rowIndex).arg(everything.size());
         for (QLabel* label : findChildren<QLabel*>()) {
             if (label->property("aluchopRole").toString() == QLatin1String("inventorySubtitle")) {
-                label->setText(QStringLiteral("%1 ingredient%2  ·  %3 supplier%4  ·  %5 need "
-                                              "attention")
-                                   .arg(everything.size())
-                                   .arg(everything.size() == 1 ? QString() : QStringLiteral("s"))
+                label->setText(QStringLiteral("%1  ·  %2 supplier%3  ·  %4 need attention")
+                                   .arg(shelfCount)
                                    .arg(suppliers.size())
                                    .arg(suppliers.size() == 1 ? QString() : QStringLiteral("s"))
                                    .arg(m_alerts->count()));

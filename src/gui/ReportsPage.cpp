@@ -15,11 +15,15 @@
  *  - **PDF** is rendered by gui::PdfExporter, because QtPrintSupport is a presentation module and
  *    must not leak downwards.
  *
- * @par The audit check and the layer rule
- * "Verify integrity" walks the fixed-record binary audit trail. The GUI layer may not name
- * `aluchop::persistence` at all, so this file calls the four delegating methods
- * services::AuditService added for exactly this purpose (`verifyTrailIntegrity`,
- * `trailRecordCount`, `recentTrailRecords`) and never touches `AuditService::trail()`.
+ * @par The audit check, the record browser and the layer rule
+ * "Verify integrity" walks the fixed-record binary audit trail, and the same dialog carries a
+ * **record browser**: type a record number and that one 128-byte record is fetched by index alone
+ * (`services::AuditService::trailRecordAt`), which is what makes the random-access file layer a
+ * feature a user can operate rather than a capability buried in the persistence layer. The GUI
+ * layer may not name `aluchop::persistence` at all, so this file calls only the four delegating
+ * methods services::AuditService added for exactly this purpose (`verifyTrailIntegrity`,
+ * `trailRecordCount`, `trailRecordAt`, `recentTrailRecords`) and never touches
+ * `AuditService::trail()`.
  *
  * @par Absolutely no SQL
  * Everything on this screen arrives through services on services::AppContext.
@@ -40,6 +44,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QFont>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -50,8 +55,10 @@
 #include <QPainter>
 #include <QPalette>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSizePolicy>
+#include <QSpinBox>
 #include <QStandardPaths>
 #include <QString>
 #include <QStringList>
@@ -80,6 +87,7 @@
 
 #include "aluchop/core/AppInfo.hpp"
 #include "aluchop/core/Money.hpp"
+#include "aluchop/gui/ChartKit.hpp"
 #include "aluchop/gui/PdfExporter.hpp"
 #include "aluchop/gui/ThemeManager.hpp"
 #include "aluchop/gui/Widgets.hpp"
@@ -277,6 +285,38 @@ bool isSummaryLabel(const QString& label) {
     return label.trimmed().compare(QLatin1String("TOTAL"), Qt::CaseInsensitive) == 0;
 }
 
+/**
+ * @brief Every count this screen quotes, worked out **once** from the one `rows()` call.
+ *
+ * The page used to print "31 rows" beside a chart captioned "the most recent 16 of 30 days",
+ * which is two true statements that read as a contradiction because each was counted somewhere
+ * else. One tally, computed from one query, is now the only source: the badge quotes `total`, the
+ * preview subtitle explains `total = data + summary`, and the chart caption's denominator is
+ * `data`. They cannot drift apart because there is nothing left to drift.
+ */
+struct RowTally {
+    int total = 0;    ///< every line the export will contain
+    int data = 0;     ///< the subject lines — days, orders, ingredients, people
+    int summary = 0;  ///< grand-total lines appended by the report itself
+
+    /// @return "days" for a date-indexed report, "entries" otherwise — used by every sentence.
+    static QString noun(bool dateLabels, int count) {
+        if (dateLabels) return count == 1 ? QStringLiteral("day") : QStringLiteral("days");
+        return count == 1 ? QStringLiteral("entry") : QStringLiteral("entries");
+    }
+};
+
+/// Counts the body of a report exactly once.
+RowTally tallyRows(const std::vector<QStringList>& rows) {
+    RowTally tally;
+    tally.total = static_cast<int>(rows.size());
+    for (const QStringList& row : rows) {
+        if (!row.isEmpty() && isSummaryLabel(row.at(0))) ++tally.summary;
+    }
+    tally.data = tally.total - tally.summary;
+    return tally;
+}
+
 /// One plotted point.
 struct ChartPoint {
     QString label;
@@ -290,8 +330,14 @@ struct ChartPlan {
     int valueColumn = -1;     ///< the last money column, else the last numeric column
     bool dateLabels = false;  ///< true when the labels are ISO dates (keep chronological order)
     bool money = false;       ///< true when the plotted column is currency
-    std::vector<ChartPoint> points;
+    bool allZero = false;     ///< every candidate figure was zero — a grid of bars nobody can see
+    std::vector<ChartPoint> points;  ///< the readable slice actually drawn
+
 };
+
+/// The longest a category label may be before it is elided — long enough to stay recognisable,
+/// short enough that the axis cannot eat the plot.
+constexpr int kMaxLabelChars = 26;
 
 /// Chooses the columns to chart and extracts the points.
 ChartPlan planChart(const QStringList& header, const std::vector<QStringList>& rows,
@@ -335,6 +381,11 @@ ChartPlan planChart(const QStringList& header, const std::vector<QStringList>& r
             const QDate day = QDate::fromString(label, Qt::ISODate);
             if (!day.isValid()) continue;  // drops any stray summary line
             shown = day.toString(QStringLiteral("d MMM"));
+        } else if (shown.size() > kMaxLabelChars) {
+            // Deliberate elision: an ingredient called "Extra Virgin Olive Oil (Cold Pressed)"
+            // would otherwise push the category axis across half the card. Shortened here, in
+            // full in the table below.
+            shown = shown.left(kMaxLabelChars - 1).trimmed() + QChar(0x2026);
         }
 
         double value = 0.0;
@@ -345,9 +396,19 @@ ChartPlan planChart(const QStringList& header, const std::vector<QStringList>& r
 
     if (plan.points.empty()) return plan;
 
+    // A column of nothing but zeros is not a chart — plotting it draws an axis, a grid and no
+    // bars, which reads as a broken widget. It is an empty state, and it is labelled as one.
+    /// @oop-concept STL (algorithms) :: std::none_of answers "is there anything to see here?"
+    plan.allZero = std::none_of(plan.points.begin(), plan.points.end(),
+                                [](const ChartPoint& p) { return p.value != 0.0; });
+    if (plan.allZero) return plan;
+
     if (plan.dateLabels) {
-        // Keep the newest slice of a long range so the bars stay readable.
-        constexpr std::size_t kMaxDays = 16;
+        // Keep the newest slice of a long range so the bars stay readable. The chart now sits in
+        // the narrower of the two columns — the table beside it is where the whole range lives —
+        // and eight is the most tilted dates that column can label without QtCharts silently
+        // dropping every other one, which is what leaves bars anonymous.
+        constexpr std::size_t kMaxDays = 8;
         if (plan.points.size() > kMaxDays)
             plan.points.erase(plan.points.begin(),
                               plan.points.end() - static_cast<std::ptrdiff_t>(kMaxDays));
@@ -355,7 +416,9 @@ ChartPlan planChart(const QStringList& header, const std::vector<QStringList>& r
         /// @oop-concept STL (algorithms) :: std::sort ranks the categories before the top slice
         std::sort(plan.points.begin(), plan.points.end(),
                   [](const ChartPoint& a, const ChartPoint& b) { return a.value > b.value; });
-        constexpr std::size_t kMaxBars = 12;
+        // Eight is what a horizontal card can label: past that QtCharts starts hiding every other
+        // category name to stop them colliding, which leaves half the bars anonymous.
+        constexpr std::size_t kMaxBars = 8;
         if (plan.points.size() > kMaxBars) plan.points.resize(kMaxBars);
         // Horizontal bars are drawn bottom-up, so reversing puts the biggest bar at the top.
         std::reverse(plan.points.begin(), plan.points.end());
@@ -363,6 +426,32 @@ ChartPlan planChart(const QStringList& header, const std::vector<QStringList>& r
 
     plan.usable = true;
     return plan;
+}
+
+/**
+ * @brief A chart with nothing in it, for the states where there is nothing to plot.
+ *
+ * QChartView must never be handed `nullptr`: QChartViewPrivate::resize() dereferences the chart
+ * unconditionally, so a view left holding a null chart segfaults the next time the page is laid
+ * out — which is a certainty, because hiding the view is itself a layout change.
+ */
+QChart* blankChart() { return chartkit::newChart(QMargins(0, 0, 0, 0), 0); }
+
+/**
+ * @brief Installs a chart in the view and destroys the one it replaces.
+ *
+ * QChartView::setChart() takes ownership of the incoming chart but only *releases* the outgoing
+ * one — it does not delete it. Every refresh builds a fresh chart, so without this the page would
+ * leak an entire chart, its series and its two axes on every date change and every theme switch.
+ *
+ * @oop-concept Dynamic Memory Allocation :: ownership handed over and reclaimed explicitly, in the
+ *              one place that knows both halves of the exchange
+ */
+void installChart(QChartView* view, QChart* next) {
+    QChart* previous = view->chart();
+    if (previous == next) return;
+    view->setChart(next);
+    delete previous;
 }
 
 /// Builds the QtCharts bar chart for a plan. The caller hands it to the QChartView, which owns it.
@@ -382,29 +471,18 @@ QChart* buildChart(const ChartPlan& plan, const QString& seriesName, const Palet
         highest = std::max(highest, point.value);
     }
 
-    auto* chart = new QChart();
-    chart->legend()->hide();
-    chart->setBackgroundVisible(false);
-    chart->setPlotAreaBackgroundVisible(false);
-    chart->setMargins(QMargins(0, 4, 0, 0));
-    chart->setAnimationOptions(QChart::SeriesAnimations);
-    chart->setAnimationDuration(420);
+    // Surface, axes and — crucially — the *tick algorithm* all come from gui::chartkit, which is
+    // the one place that decides what an AluChop chart looks like. The dashboard's revenue chart
+    // is built from exactly the same three calls, so the two can no longer disagree about
+    // anything, ticks included.
+    QChart* chart = chartkit::newChart();
 
-    auto* categoryAxis = new QBarCategoryAxis();
-    categoryAxis->append(categories);
-    categoryAxis->setLabelsColor(pal.textMuted);
-    categoryAxis->setLineVisible(false);
-    categoryAxis->setGridLineVisible(false);
+    // Dates run along the bottom, so past roughly six of them the labels would collide. Tilting
+    // is deliberate: QtCharts reserves the extra height, so nothing is clipped either.
+    QBarCategoryAxis* categoryAxis = chartkit::newCategoryAxis(
+        categories, pal, plan.dateLabels && categories.size() > 6 ? -45 : 0);
 
-    auto* valueAxis = new QValueAxis();
-    valueAxis->setLabelFormat(highest < 10.0 ? QStringLiteral("%.2f") : QStringLiteral("%.0f"));
-    valueAxis->setTickCount(5);
-    valueAxis->setRange(lowest < 0.0 ? lowest * 1.15 : 0.0,
-                        highest > 0.0 ? highest * 1.18 : 1.0);
-    valueAxis->setLabelsColor(pal.textMuted);
-    valueAxis->setLineVisible(false);
-    valueAxis->setGridLineColor(pal.border);
-    valueAxis->setMinorGridLineVisible(false);
+    QValueAxis* valueAxis = chartkit::newValueAxis(lowest, highest, pal);
 
     if (plan.dateLabels) {
         auto* series = new QBarSeries();
@@ -496,6 +574,106 @@ QString fixedField(const char* field, std::size_t capacity) {
     return QString::fromLatin1(field, used).trimmed();
 }
 
+/**
+ * @brief Gives the preview table's *identifying* column the width, and every other column only
+ *        what it actually needs.
+ *
+ * Stretching every text column equally is what used to make `Unit` ("kg") exactly as wide as
+ * `Ingredient` ("Extra Virgin Olive Oil"), so the one column a reader navigates by was the one
+ * being elided while a two-letter column sat in a field of white. The rule here is the opposite:
+ * every report leads with its subject — Date, Order #, Ingredient, Name — so the first non-figure
+ * column stretches and takes all the slack, and each remaining column is measured against its own
+ * header and cells and given that width, capped so a long e-mail cannot eat the table.
+ *
+ * @param table the preview table, already filled.
+ * @param profiles the per-column analysis, so figures are recognised without re-parsing.
+ */
+void fitColumns(QTableWidget* table, const std::vector<ColumnProfile>& profiles) {
+    const int columns = table->columnCount();
+    if (columns <= 0) return;
+
+    QHeaderView* header = table->horizontalHeader();
+    // Stretch already consumes the full viewport; leaving this on would fight it.
+    header->setStretchLastSection(false);
+    // Short columns must be allowed to *be* short — a floor of 88 px is precisely what forced
+    // "Low?" and "Unit" to be as wide as a name.
+    header->setMinimumSectionSize(64);
+    table->setTextElideMode(Qt::ElideRight);  // only ever applied to the columns chosen below
+
+    // The identifying column: the first that is not a column of figures.
+    int identifier = 0;
+    for (int c = 0; c < columns; ++c) {
+        const bool figures = c < static_cast<int>(profiles.size()) &&
+                             profiles[static_cast<std::size_t>(c)].isFigures();
+        if (!figures) {
+            identifier = c;
+            break;
+        }
+    }
+
+    const QFontMetrics cellMetrics(table->font());
+    const QFontMetrics headMetrics(header->font());
+    constexpr int kPadding = 30;   ///< the stylesheet's own cell padding, plus breathing room
+    constexpr int kNarrowest = 72; ///< "Low?", "Unit" — never narrower than a readable caption
+    constexpr int kWidest = 210;   ///< an e-mail address; past this the identifier would starve
+
+    for (int c = 0; c < columns; ++c) {
+        if (c == identifier) {
+            header->setSectionResizeMode(c, QHeaderView::Stretch);
+            continue;
+        }
+        int wanted = headMetrics.horizontalAdvance(
+            table->model()->headerData(c, Qt::Horizontal).toString());
+        for (int r = 0; r < table->rowCount(); ++r) {
+            if (const QTableWidgetItem* cell = table->item(r, c))
+                wanted = std::max(wanted, cellMetrics.horizontalAdvance(cell->text()));
+        }
+        header->setSectionResizeMode(c, QHeaderView::Interactive);
+        header->resizeSection(c, std::clamp(wanted + kPadding, kNarrowest, kWidest));
+    }
+}
+
+/**
+ * @brief The EmptyState belonging to one card.
+ *
+ * Two cards now carry one each, and gui::EmptyState is meta-object-free by design (Widgets.hpp),
+ * so it is addressed the way the stylesheet addresses it: by object name, and only among the
+ * card's own direct children — which is what keeps the two apart.
+ */
+QFrame* emptyStateIn(QWidget* card) {
+    return card ? card->findChild<QFrame*>(QStringLiteral("emptyState"),
+                                           Qt::FindDirectChildrenOnly)
+                : nullptr;
+}
+
+/// Rewrites an EmptyState's two lines through its labels — no downcast, and the hint hides itself.
+void setEmptyState(QFrame* state, const QString& title, const QString& hint) {
+    if (!state) return;
+    if (auto* titleLabel = state->findChild<QLabel*>(QStringLiteral("emptyStateTitle")))
+        titleLabel->setText(title);
+    if (auto* hintLabel = state->findChild<QLabel*>(QStringLiteral("emptyStateHint"))) {
+        hintLabel->setText(hint);
+        hintLabel->setVisible(!hint.isEmpty());
+    }
+}
+
+/// Why there is no chart, in the user's terms — never a bare grid with nothing in it.
+void describeEmptyChart(QFrame* state, const ChartPlan& plan, bool hasRows) {
+    if (!hasRows) {
+        setEmptyState(state, QStringLiteral("Nothing to chart yet"),
+                      QStringLiteral("This report returned no rows for the selected range — "
+                                     "widen the dates, or choose another report."));
+    } else if (plan.allZero) {
+        setEmptyState(state, QStringLiteral("No activity in this range"),
+                      QStringLiteral("Every figure in the plotted column is zero, so there are "
+                                     "no bars to draw. The rows are listed below."));
+    } else {
+        setEmptyState(state, QStringLiteral("This report has no figures to plot"),
+                      QStringLiteral("Its columns are descriptive rather than numeric — the full "
+                                     "detail is in the table below, and both exports carry it."));
+    }
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -506,8 +684,8 @@ ReportsPage::ReportsPage(services::AppContext& ctx, QWidget* parent) : Page(ctx,
     setObjectName(QStringLiteral("reportsPage"));
 
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(24, 22, 24, 20);
-    root->setSpacing(18);
+    root->setContentsMargins(24, 22, 24, 18);
+    root->setSpacing(16);
 
     // --- page header --------------------------------------------------------
     auto* headerRow = new QHBoxLayout();
@@ -541,14 +719,33 @@ ReportsPage::ReportsPage(services::AppContext& ctx, QWidget* parent) : Page(ctx,
 
     root->addLayout(headerRow);
 
-    // --- controls -----------------------------------------------------------
-    QFrame* controlPanel = nullptr;
-    QVBoxLayout* controlColumn =
-        buildPanel(QStringLiteral("What do you want to look at?"),
-                   QStringLiteral("The date range applies to the time-based reports; the stock, "
-                                  "loyalty and roster reports always show the position as it "
-                                  "stands right now."),
-                   this, &controlPanel);
+    // --- body ----------------------------------------------------------------
+    // The body is a scroll area purely as a *safety net* for a window squeezed down to the shell's
+    // 1140x740 minimum: at any ordinary size the filter strip and the chart/table row fit exactly,
+    // the row absorbs every spare pixel, and no scrollbar is drawn at all. The old arrangement
+    // stacked three full-width cards whose minimum heights summed to more than the viewport, so
+    // the screen *always* scrolled and the preview table — the entire point of the page — never
+    // showed a single row above the fold.
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->viewport()->setAutoFillBackground(false);
+
+    auto* body = new QWidget(scroll);
+    body->setAutoFillBackground(false);
+    auto* bodyColumn = new QVBoxLayout(body);
+    // GlassPanel paints its soft shadow *outside* its own rectangle, so the column keeps a margin
+    // all round; without it the last card's shadow is shaved off by the viewport edge.
+    bodyColumn->setContentsMargins(2, 2, 6, 6);
+    bodyColumn->setSpacing(16);
+
+    // --- controls: one compact strip, not a card with a paragraph in it ------
+    auto* controlPanel = new GlassPanel(body);
+    controlPanel->setObjectName(QStringLiteral("card"));
+    auto* controlColumn = new QVBoxLayout(controlPanel);
+    controlColumn->setContentsMargins(18, 14, 18, 14);
+    controlColumn->setSpacing(8);
 
     auto* controls = new QHBoxLayout();
     controls->setSpacing(14);
@@ -573,10 +770,15 @@ ReportsPage::ReportsPage(services::AppContext& ctx, QWidget* parent) : Page(ctx,
     fromColumn->addWidget(
         styledLabel(QStringLiteral("From"), QStringLiteral("statCardTitle"), controlPanel, -1,
                     QFont::DemiBold));
+    // No local stylesheet on either date field: ThemeManager styles QDateEdit and QComboBox from
+    // the same rule, and a page-level override here is what makes a row of inputs look mismatched.
+    // Only the geometry is set, and it matches the report combo beside it exactly.
     m_from = new QDateEdit(today.addDays(-29), controlPanel);
     m_from->setCalendarPopup(true);
     m_from->setDisplayFormat(QStringLiteral("d MMM yyyy"));
     m_from->setMinimumHeight(38);
+    m_from->setMinimumWidth(150);
+    m_from->setCursor(Qt::PointingHandCursor);
     fromColumn->addWidget(m_from);
     controls->addLayout(fromColumn);
 
@@ -589,6 +791,8 @@ ReportsPage::ReportsPage(services::AppContext& ctx, QWidget* parent) : Page(ctx,
     m_to->setCalendarPopup(true);
     m_to->setDisplayFormat(QStringLiteral("d MMM yyyy"));
     m_to->setMinimumHeight(38);
+    m_to->setMinimumWidth(150);
+    m_to->setCursor(Qt::PointingHandCursor);
     toColumn->addWidget(m_to);
     controls->addLayout(toColumn);
 
@@ -621,59 +825,103 @@ ReportsPage::ReportsPage(services::AppContext& ctx, QWidget* parent) : Page(ctx,
 
     controls->addStretch(1);
 
-    auto* rowCount = styledLabel(QString(), QStringLiteral("reportRowCount"), controlPanel, 2,
-                                 QFont::DemiBold);
-    rowCount->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    controls->addWidget(rowCount, 0, Qt::AlignBottom);
-
     controlColumn->addLayout(controls);
-    root->addWidget(controlPanel);
 
-    // --- chart --------------------------------------------------------------
+    // The selected kind explains itself on its own line. It is deliberately this panel's ONLY
+    // direct child named "mutedLabel", which is what lets refresh() re-write it by name without
+    // this page carrying a member pointer the frozen header does not declare.
+    auto* kindHint = styledLabel(QString(), QStringLiteral("mutedLabel"), controlPanel, -1);
+    kindHint->setWordWrap(true);
+    controlColumn->addWidget(kindHint);
+
+    bodyColumn->addWidget(controlPanel);
+
+    // --- chart beside the data, not on top of it -----------------------------
+    // A 1300 px card spending 470 px of height on a single bar, with the table it describes pushed
+    // entirely below the fold, is the whole complaint in one picture. Landscape space is what this
+    // window has most of, so the garnish takes the narrow column (4) and the report itself takes
+    // the wide one (7) — and both are full height, so the table shows a dozen rows rather than a
+    // header band.
+    auto* mainRow = new QHBoxLayout();
+    mainRow->setSpacing(16);
+
     QFrame* chartPanel = nullptr;
     QVBoxLayout* chartColumn =
         buildPanel(QStringLiteral("Chart"),
-                   QStringLiteral("Built from exactly the rows listed below."), this, &chartPanel);
+                   QStringLiteral("Built from exactly the rows listed beside it."), body,
+                   &chartPanel);
     m_chart = new QChartView(chartPanel);
     m_chart->setObjectName(QStringLiteral("reportChart"));
     m_chart->setRenderHint(QPainter::Antialiasing, true);
     m_chart->setFrameShape(QFrame::NoFrame);
-    m_chart->setMinimumHeight(240);
+    // The floor at which the value axis, the bars, the tilted category labels and the baseline all
+    // still fit. Below it QtCharts starts dropping the bottom of the plot. It is only a floor now:
+    // in the side-by-side row the plot gets the card's full height, which is far more.
+    m_chart->setMinimumHeight(200);
     m_chart->setBackgroundBrush(Qt::NoBrush);
     m_chart->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     chartColumn->addWidget(m_chart, 1);
-    root->addWidget(chartPanel, 2);
+
+    // A chart with nothing in it says so, instead of showing an empty grid.
+    auto* chartEmpty = new EmptyState(QStringLiteral("Nothing to chart yet"),
+                                      QStringLiteral("Widen the date range, or choose another "
+                                                     "report."),
+                                      chartPanel);
+    chartEmpty->setMinimumHeight(200);
+    chartEmpty->setVisible(false);
+    chartColumn->addWidget(chartEmpty, 1);
+
+    // No explicit minimum on the card itself: an explicit minimumHeight *replaces* the one its
+    // layout computes (qSmartMinSize), so a number guessed here could end up smaller than the
+    // heading, subtitle, padding and plot actually need. The chart's own floor propagates up
+    // through the card's layout instead, which cannot be wrong.
+    mainRow->addWidget(chartPanel, 4);
 
     // --- preview ------------------------------------------------------------
     QFrame* previewPanel = nullptr;
     QVBoxLayout* previewColumn =
         buildPanel(QStringLiteral("Preview"),
                    QStringLiteral("Exactly the rows an export will contain, in export order."),
-                   this, &previewPanel);
+                   body, &previewPanel);
 
     m_preview = new ElegantTable(previewPanel);
     // Sorting is deliberately off: the preview must agree row-for-row with the exported file.
     m_preview->setSortingEnabled(false);
-    m_preview->setMinimumHeight(200);
+    // Five 44 px rows plus the header is the *floor*, for a window squeezed to the shell minimum;
+    // at any ordinary size the card is full height and this table shows eleven or twelve.
+    m_preview->setMinimumHeight(5 * 44 + 44);
     m_preview->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_preview->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     previewColumn->addWidget(m_preview, 1);
+
+    // The row count sits with the rows, where a reader is already looking, rather than in the
+    // filter strip a screen away from the table it describes.
+    auto* rowCount = styledLabel(QString(), QStringLiteral("reportRowCount"), previewPanel, -1,
+                                 QFont::DemiBold);
+    rowCount->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    previewColumn->addWidget(rowCount);
 
     auto* empty = new EmptyState(QStringLiteral("Nothing to report yet"),
                                  QStringLiteral("Widen the date range, or choose another report."),
                                  previewPanel);
+    empty->setMinimumHeight(200);
     empty->setVisible(false);
     previewColumn->addWidget(empty, 1);
 
-    root->addWidget(previewPanel, 3);
+    mainRow->addWidget(previewPanel, 7);
+    bodyColumn->addLayout(mainRow, 1);
 
     // --- where the last file went -------------------------------------------
-    auto* status = styledLabel(QString(), QStringLiteral("reportStatus"), this, -1);
+    auto* status = styledLabel(QString(), QStringLiteral("reportStatus"), body, -1);
     status->setTextFormat(Qt::RichText);
     status->setTextInteractionFlags(Qt::TextBrowserInteraction);
     status->setOpenExternalLinks(true);
     status->setWordWrap(true);
     status->setVisible(false);
-    root->addWidget(status);
+    bodyColumn->addWidget(status);
+
+    scroll->setWidget(body);
+    root->addWidget(scroll, 1);
 
     // --- wiring --------------------------------------------------------------
     connect(m_kind, &QComboBox::currentIndexChanged, this, &ReportsPage::onKindChanged);
@@ -694,7 +942,10 @@ QString ReportsPage::pageTitle() const { return QStringLiteral("Reports"); }
 void ReportsPage::refresh() {
     const Palette& pal = ThemeManager::instance().palette();
 
-    auto* emptyState = findChild<QFrame*>(QStringLiteral("emptyState"));
+    // Two cards now carry an EmptyState, so each is looked up inside its own card rather than by
+    // a page-wide name search that would always find whichever was constructed first.
+    QFrame* previewEmpty = emptyStateIn(m_preview->parentWidget());
+    QFrame* chartEmpty = emptyStateIn(m_chart->parentWidget());
     auto* rowCount = findChild<QLabel*>(QStringLiteral("reportRowCount"));
 
     // The date pickers are a range: never let "to" precede "from".
@@ -718,6 +969,12 @@ void ReportsPage::refresh() {
         const QStringList header = report->header();
         const std::vector<QStringList> rows = report->rows();
         const std::vector<ColumnProfile> profiles = profileColumns(header.size(), rows);
+
+        // Counted once, quoted everywhere. `rows` is the single query behind this whole screen,
+        // so the badge under the table, the sentence that explains it and the chart caption's
+        // denominator are all read off this one tally and cannot contradict one another.
+        const RowTally tally = tallyRows(rows);
+        const ChartPlan plan = planChart(header, rows, profiles);
 
         // ---- preview table -------------------------------------------------
         m_preview->clear();
@@ -748,34 +1005,53 @@ void ReportsPage::refresh() {
                 m_preview->setItem(rowIndex, c, cell);
             }
         }
-        if (header.size() > 0) {
-            m_preview->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
-            m_preview->resizeColumnsToContents();
-            m_preview->horizontalHeader()->setStretchLastSection(true);
-        }
+        // The table fills its card: figures stay as narrow as their numbers, text columns share
+        // what is left, and Qt re-applies both on every resize.
+        fitColumns(m_preview, profiles);
 
         const bool hasRows = !rows.empty();
         m_preview->setVisible(hasRows);
-        if (emptyState) emptyState->setVisible(!hasRows);
+        if (previewEmpty) {
+            // Restated every time, so a message left over from a failed read cannot survive into
+            // an ordinary "this range is empty".
+            setEmptyState(previewEmpty, QStringLiteral("Nothing to report yet"),
+                          QStringLiteral("Widen the date range, or choose another report."));
+            previewEmpty->setVisible(!hasRows);
+        }
         if (rowCount) {
-            rowCount->setText(hasRows ? QStringLiteral("%1 row%2")
-                                            .arg(rows.size())
-                                            .arg(rows.size() == 1 ? QString()
-                                                                  : QStringLiteral("s"))
-                                      : QStringLiteral("no rows"));
+            // Spelled out rather than left as a bare "31 rows" beside a chart that talks about
+            // "30 days": the composition is stated, so the two figures visibly add up.
+            QString tallyText;
+            if (!hasRows) {
+                tallyText = QStringLiteral("no rows");
+            } else if (tally.summary > 0) {
+                tallyText = QStringLiteral("%1 rows  ·  %2 %3 and a grand-total line")
+                                .arg(tally.total)
+                                .arg(tally.data)
+                                .arg(RowTally::noun(plan.dateLabels, tally.data));
+            } else {
+                tallyText = QStringLiteral("%1 %2")
+                                .arg(tally.total)
+                                .arg(tally.total == 1 ? QStringLiteral("row") : QStringLiteral("rows"));
+            }
+            rowCount->setText(tallyText);
+            rowCount->setVisible(true);
         }
 
         // ---- chart ----------------------------------------------------------
-        const ChartPlan plan = planChart(header, rows, profiles);
         QString caption = QStringLiteral("Chart");
         if (plan.usable) {
             caption = QStringLiteral("%1 by %2")
                           .arg(header.at(plan.valueColumn), header.at(plan.labelColumn));
-            m_chart->setChart(buildChart(plan, header.at(plan.valueColumn), pal));
+            installChart(m_chart, buildChart(plan, header.at(plan.valueColumn), pal));
             m_chart->setVisible(true);
+            if (chartEmpty) chartEmpty->setVisible(false);
         } else {
-            m_chart->setChart(nullptr);
+            // Never leave a bare grid on screen: the old chart goes, and the card explains itself.
+            installChart(m_chart, blankChart());
             m_chart->setVisible(false);
+            describeEmptyChart(chartEmpty, plan, hasRows);
+            if (chartEmpty) chartEmpty->setVisible(true);
         }
 
         // The chart card's own heading and subtitle are its only direct QLabel children,
@@ -786,13 +1062,44 @@ void ReportsPage::refresh() {
                 heading->setText(caption);
             if (auto* sub = chartPanel->findChild<QLabel*>(QStringLiteral("mutedLabel"),
                                                           Qt::FindDirectChildrenOnly)) {
-                sub->setText(plan.usable
-                                 ? QStringLiteral("%1  ·  built from exactly the rows below%2")
-                                       .arg(title, plan.money
-                                                       ? QStringLiteral(", in rupees")
-                                                       : QString())
-                                 : QStringLiteral("%1  ·  this report has no figures to plot.")
-                                       .arg(title));
+                QString explanation;
+                if (plan.usable) {
+                    const QString unit = plan.money ? QStringLiteral(", in rupees") : QString();
+                    // The denominator is the tally's own data-row count — the very number the
+                    // badge under the table breaks out — so "the most recent 8 of 30 days" and
+                    // "31 rows · 30 days and a grand-total line" are arithmetic, not coincidence.
+                    if (static_cast<int>(plan.points.size()) < tally.data) {
+                        // The chart shows a readable slice, so it says so rather than claiming to
+                        // be the whole table.
+                        explanation =
+                            plan.dateLabels
+                                ? QStringLiteral("%1  ·  the most recent %2 of %3 days beside it%4")
+                                      .arg(title)
+                                      .arg(plan.points.size())
+                                      .arg(tally.data)
+                                      .arg(unit)
+                                : QStringLiteral("%1  ·  the %2 largest of %3 entries beside it%4")
+                                      .arg(title)
+                                      .arg(plan.points.size())
+                                      .arg(tally.data)
+                                      .arg(unit);
+                    } else {
+                        explanation =
+                            QStringLiteral("%1  ·  all %2 %3 in the table beside it%4")
+                                .arg(title)
+                                .arg(tally.data)
+                                .arg(RowTally::noun(plan.dateLabels, tally.data), unit);
+                    }
+                } else if (!hasRows) {
+                    explanation = QStringLiteral("%1  ·  no rows in this range.").arg(title);
+                } else if (plan.allZero) {
+                    explanation = QStringLiteral("%1  ·  every figure in this range is zero.")
+                                      .arg(title);
+                } else {
+                    explanation = QStringLiteral("%1  ·  this report has no figures to plot.")
+                                      .arg(title);
+                }
+                sub->setText(explanation);
             }
         }
 
@@ -806,8 +1113,18 @@ void ReportsPage::refresh() {
         // Page::refresh() must never throw — a failed read becomes a visible notice instead.
         m_preview->setRowCount(0);
         m_preview->setVisible(false);
-        m_chart->setChart(nullptr);
-        if (emptyState) emptyState->setVisible(true);
+        installChart(m_chart, blankChart());
+        m_chart->setVisible(false);
+        if (previewEmpty) {
+            setEmptyState(previewEmpty, QStringLiteral("This report could not be built"),
+                          QString::fromUtf8(e.what()));
+            previewEmpty->setVisible(true);
+        }
+        if (chartEmpty) {
+            setEmptyState(chartEmpty, QStringLiteral("Nothing to chart"),
+                          QStringLiteral("The report behind this chart could not be read."));
+            chartEmpty->setVisible(true);
+        }
         if (rowCount) rowCount->setText(QStringLiteral("unavailable"));
         m_ctx.notifications().notify(QStringLiteral("Reports"), QString::fromUtf8(e.what()), 3);
     }
@@ -893,7 +1210,8 @@ void ReportsPage::onVerifyAudit() {
 
     QDialog dialog(this);
     dialog.setWindowTitle(QStringLiteral("Audit trail integrity"));
-    dialog.setMinimumWidth(720);
+    // Wide enough that the seven record columns below fit without a horizontal scrollbar.
+    dialog.setMinimumWidth(880);
 
     auto* column = new QVBoxLayout(&dialog);
     column->setContentsMargins(24, 22, 24, 20);
@@ -939,18 +1257,201 @@ void ReportsPage::onVerifyAudit() {
     detailLabel->setWordWrap(true);
     column->addWidget(detailLabel);
 
+    // -----------------------------------------------------------------------
+    // Random-access record browser — "fetch record #N"
+    // -----------------------------------------------------------------------
+    // This is the seek-by-index capability made operable. Nothing is scanned: the index alone
+    // decides the byte offset (N × 128) the trail seeks to, so record 0 and record 90 000 cost the
+    // same. services::AuditService::trailRecordAt is the only method used, so no persistence type
+    // is ever named in this GUI translation unit.
+    auto* browser = new GlassPanel(&dialog);
+    browser->setObjectName(QStringLiteral("card"));
+    auto* browserColumn = new QVBoxLayout(browser);
+    browserColumn->setContentsMargins(16, 14, 16, 14);
+    browserColumn->setSpacing(10);
+
+    browserColumn->addWidget(styledLabel(QStringLiteral("Jump straight to a record"),
+                                         QStringLiteral("sectionTitle"), browser, 0,
+                                         QFont::DemiBold));
+
+    auto* jumpRow = new QHBoxLayout();
+    jumpRow->setSpacing(12);
+
+    const bool browsable = failure.isEmpty() && records > 0;
+    const int lastIndex = records > 0 ? static_cast<int>(records - 1) : 0;
+
+    // The control is captioned and carries its own range, in the field and beside it: this is a
+    // graded demonstration of random-access file IO, so it has to read as a designed instrument
+    // rather than a bare number box somebody left behind.
+    auto* jumpColumn = new QVBoxLayout();
+    jumpColumn->setSpacing(4);
+    jumpColumn->addWidget(styledLabel(QStringLiteral("Record number"),
+                                      QStringLiteral("statCardTitle"), browser, -1,
+                                      QFont::DemiBold));
+
+    auto* jumpSpin = new QSpinBox(browser);
+    jumpSpin->setObjectName(QStringLiteral("auditRecordIndex"));
+    jumpSpin->setMinimumHeight(38);
+    jumpSpin->setMinimumWidth(170);
+    jumpSpin->setRange(0, lastIndex);
+    jumpSpin->setPrefix(QStringLiteral("#  "));
+    // The upper bound travels inside the field — "#  339 of 339" — so the valid range is legible
+    // without looking anywhere else, and the arrows walk the file record by record.
+    jumpSpin->setSuffix(QStringLiteral("  of %1").arg(lastIndex));
+    jumpSpin->setAccelerated(true);
+    jumpSpin->setAlignment(Qt::AlignHCenter);
+    jumpSpin->setEnabled(browsable);
+    jumpSpin->setToolTip(QStringLiteral(
+        "The record's position in the file, counted from zero. Record N is read straight from "
+        "byte N × 128 — no scanning."));
+    jumpColumn->addWidget(jumpSpin);
+    jumpRow->addLayout(jumpColumn, 0);
+
+    auto* fetchColumn = new QVBoxLayout();
+    fetchColumn->setSpacing(4);
+    fetchColumn->addWidget(styledLabel(QString(), QStringLiteral("statCardTitle"), browser, -1));
+    auto* fetchBtn = makeButton(QStringLiteral("Read this record"),
+                                QStringLiteral("primaryButton"), browser);
+    fetchBtn->setEnabled(browsable);
+    fetchColumn->addWidget(fetchBtn);
+    jumpRow->addLayout(fetchColumn, 0);
+
+    auto* rangeLabel = styledLabel(
+        browsable ? QStringLiteral("Any number from 0 to %1 is valid  ·  %2 records on file  ·  "
+                                   "every one of them costs a single seek")
+                        .arg(lastIndex).arg(records)
+                  : QStringLiteral("The trail holds no records yet — there is nothing to fetch."),
+        QStringLiteral("mutedLabel"), browser, -1);
+    rangeLabel->setWordWrap(true);
+    jumpRow->addWidget(rangeLabel, 1, Qt::AlignBottom);
+    browserColumn->addLayout(jumpRow);
+
+    auto* recordHeadline = styledLabel(
+        browsable ? QStringLiteral("Reading…") : QStringLiteral("Nothing to browse"),
+        QStringLiteral("sectionTitle"), browser, 0, QFont::DemiBold);
+    recordHeadline->setWordWrap(true);
+    browserColumn->addWidget(recordHeadline);
+
+    auto* recordBody = styledLabel(
+        browsable ? QString()
+                  : QStringLiteral("Records appear here as soon as the restaurant is used."),
+        QStringLiteral("mutedLabel"), browser, 0);
+    recordBody->setWordWrap(true);
+    recordBody->setMinimumHeight(56);
+    recordBody->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    browserColumn->addWidget(recordBody);
+
+    // Colours are read from the live palette at click time, so the dialog obeys a theme switch.
+    const auto tintLabel = [](QLabel* label, const QColor& colour) {
+        QPalette p = label->palette();
+        p.setColor(QPalette::WindowText, colour);
+        label->setPalette(p);
+    };
+
+    const auto fetchRecord = [this, jumpSpin, recordHeadline, recordBody, tintLabel]() {
+                const Palette& live = ThemeManager::instance().palette();
+                const int wanted = jumpSpin->value();
+
+                // The spin box already clamps to the file's range; the try/catch is what keeps an
+                // index that has *become* invalid — a trail truncated or rotated while this dialog
+                // was open — a readable sentence instead of an unhandled FileIOException.
+                try {
+                    /// `auto` on purpose: naming the record type would drag a persistence header
+                    /// into a GUI translation unit (ARCHITECTURE §1, §12 R1).
+                    const auto record =
+                        m_ctx.audit().trailRecordAt(static_cast<std::size_t>(wanted));
+
+                    const QDateTime when =
+                        QDateTime::fromMSecsSinceEpoch(record.timestampUtcMs, QTimeZone::UTC)
+                            .toLocalTime();
+                    const core::Money amount(record.amountPaisa);
+                    const QString details = fixedField(record.details, sizeof(record.details));
+
+                    tintLabel(recordHeadline, live.primary);
+                    recordHeadline->setText(
+                        QStringLiteral("Record #%1  ·  %2  ·  %3")
+                            .arg(wanted)
+                            .arg(fixedField(record.action, sizeof(record.action)),
+                                 fixedField(record.entity, sizeof(record.entity))));
+
+                    tintLabel(recordBody, live.textMuted);
+                    recordBody->setText(
+                        QStringLiteral("%1  ·  sequence %2  ·  %3  ·  %4\n"
+                                       "Read from byte offset %5 in one seek.%6")
+                            .arg(when.toString(QStringLiteral("d MMM yyyy hh:mm:ss")))
+                            .arg(record.seq)
+                            .arg(amount.isZero() ? QStringLiteral("no money involved")
+                                                 : core::formatNpr(amount),
+                                 record.userId == 0u ? QStringLiteral("by the system")
+                                                     : QStringLiteral("by user #%1")
+                                                           .arg(record.userId))
+                            .arg(static_cast<qulonglong>(wanted) * 128ull)
+                            .arg(details.isEmpty() ? QString()
+                                                   : QStringLiteral("  Details: %1").arg(details)));
+                } catch (const std::exception& e) {
+                    tintLabel(recordHeadline, live.danger);
+                    recordHeadline->setText(
+                        QStringLiteral("Record #%1 could not be read").arg(wanted));
+                    tintLabel(recordBody, live.textMuted);
+                    recordBody->setText(QString::fromUtf8(e.what()));
+                }
+    };
+
+    // Both the button and the spin box's own arrows drive the same read, so the trail can be
+    // walked record by record; and the browser opens on the newest record already fetched rather
+    // than on an empty "no record fetched yet" box that has to be poked before it does anything.
+    connect(fetchBtn, &QPushButton::clicked, &dialog, fetchRecord);
+    connect(jumpSpin, &QSpinBox::valueChanged, &dialog, [fetchRecord](int) { fetchRecord(); });
+    if (browsable) {
+        jumpSpin->setValue(lastIndex);
+        fetchRecord();
+    }
+
+    column->addWidget(browser);
+
+    // The table below is a *tail*, not the file. Saying so is the difference between a reader
+    // trusting the figure above it ("318 records on file") and wondering why they can only see
+    // fifteen of them.
+    constexpr int kRecentRecords = 15;
+    auto* recentCaption = styledLabel(
+        records == 0 ? QStringLiteral("The trail is empty.")
+                     : QStringLiteral("The last %1 records written, oldest of the %1 first — the "
+                                      "browser above reaches any of the other %2.")
+                           .arg(kRecentRecords)
+                           .arg(records > kRecentRecords
+                                    ? static_cast<qulonglong>(records) - kRecentRecords
+                                    : 0ull),
+        QStringLiteral("mutedLabel"), &dialog, 0);
+    recentCaption->setWordWrap(true);
+    column->addWidget(recentCaption);
+
     auto* table = new ElegantTable(QStringList{QStringLiteral("When"), QStringLiteral("Seq"),
                                                QStringLiteral("Action"), QStringLiteral("Entity"),
                                                QStringLiteral("Amount"), QStringLiteral("User"),
                                                QStringLiteral("Details")},
                                   &dialog);
     table->setSortingEnabled(false);
-    table->setMinimumHeight(280);
+    // Exactly seven 44 px rows under the 44 px header, so the block never ends on a sliced row and
+    // the dialog still fits a laptop screen with the record browser above it. Five showed a third
+    // of what had been fetched and left the rest behind a scrollbar for no reason.
+    // Pinned, not merely floored: with only a minimum the layout handed the table a few spare
+    // pixels and an eighth row appeared sliced across the bottom edge.
+    table->setMinimumHeight(7 * 44 + 44);
+    table->setMaximumHeight(7 * 44 + 44);
+    table->setTextElideMode(Qt::ElideRight);
+    // The six fixed fields take the width they need and free text takes the rest, so nothing has
+    // to be scrolled sideways to be read.
+    table->horizontalHeader()->setStretchLastSection(false);
+    for (int c = 0; c < table->columnCount() - 1; ++c)
+        table->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
+    table->horizontalHeader()->setSectionResizeMode(table->columnCount() - 1,
+                                                    QHeaderView::Stretch);
 
     try {
         // `auto` on purpose: naming the record type would drag a persistence header into a GUI
         // translation unit and break the layer rule (ARCHITECTURE §1, §12 R1).
-        const auto recent = m_ctx.audit().recentTrailRecords(15);
+        const auto recent =
+            m_ctx.audit().recentTrailRecords(static_cast<std::size_t>(kRecentRecords));
         table->setRowCount(static_cast<int>(recent.size()));
         int rowIndex = 0;
         for (const auto& record : recent) {
@@ -1003,8 +1504,8 @@ void ReportsPage::onVerifyAudit() {
         table->setRowHeight(0, 80);
     }
 
-    table->resizeColumnsToContents();
-    table->horizontalHeader()->setStretchLastSection(true);
+    // Column widths are already governed by the resize modes set above; re-measuring here would
+    // put the table back to a width wider than the dialog and bring the scrollbar back.
     column->addWidget(table, 1);
 
     auto* buttonRow = new QHBoxLayout();

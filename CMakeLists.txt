@@ -235,6 +235,59 @@ set_target_properties(AluChop PROPERTIES
 )
 
 # ---------------------------------------------------------------------------
+# Verification targets (EXCLUDE_FROM_ALL — never slow down a normal build).
+#
+#   aluchop_uishot : renders every screen offscreen to PNG. macOS refuses
+#                    screencapture without a Screen Recording TCC grant, so the
+#                    only reliable way to see the real UI is to have the app
+#                    grab its own widgets via QWidget::grab().
+#   aluchop_e2e    : headless end-to-end assertion of the business flow
+#                    (order -> kitchen -> serve -> inventory -> bill -> pay).
+#
+# Both reuse the application sources minus main.cpp and supply their own main().
+#
+#   cmake --build build --target aluchop_uishot aluchop_e2e
+# ---------------------------------------------------------------------------
+set(ALUCHOP_SHARED_SOURCES
+    ${ALUCHOP_CORE_SOURCES}
+    ${ALUCHOP_MODEL_SOURCES}
+    ${ALUCHOP_PERSISTENCE_SOURCES}
+    ${ALUCHOP_SERVICE_SOURCES}
+    ${ALUCHOP_GUI_SOURCES}
+    ${ALUCHOP_MOC_HEADERS}
+)
+
+foreach(_probe uishot e2e)
+    if(_probe STREQUAL "uishot")
+        set(_probe_src "${CMAKE_CURRENT_SOURCE_DIR}/tools/uishot.cpp")
+    else()
+        set(_probe_src "${CMAKE_CURRENT_SOURCE_DIR}/tests/e2e_test.cpp")
+    endif()
+
+    # Only declare the target once its driver file actually exists, so a fresh
+    # clone that has not written them yet still configures cleanly.
+    if(EXISTS "${_probe_src}")
+        add_executable(aluchop_${_probe} EXCLUDE_FROM_ALL
+            "${_probe_src}"
+            ${ALUCHOP_SHARED_SOURCES}
+        )
+        target_include_directories(aluchop_${_probe} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+        )
+        target_link_libraries(aluchop_${_probe} PRIVATE
+            Qt6::Widgets Qt6::Sql Qt6::Charts Qt6::Svg Qt6::PrintSupport
+        )
+        if(NOT MSVC)
+            target_compile_options(aluchop_${_probe} PRIVATE -Wall -Wextra)
+        endif()
+        set_target_properties(aluchop_${_probe} PROPERTIES
+            MACOSX_BUNDLE OFF
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        )
+    endif()
+endforeach()
+
+# ---------------------------------------------------------------------------
 # Assets: copy assets/ next to the binary so the app can be run straight out of
 # build/. This is its own ALL target rather than a POST_BUILD step, because
 # editing only assets/menu/menu_seed.json does not relink AluChop — a

@@ -5,11 +5,13 @@
  *
  * The splash is the first thing a marker sees, so it is composed rather than assembled: the whole
  * card is painted once into a single high-DPI pixmap — sage gradient, generated chef-hat mark,
- * wordmark, tagline, hairline rule and the SPEC §10 credit — and a busy progress bar is laid over
- * it as a real child widget so the theme styles it like everything else.
+ * wordmark, tagline, hairline rule and the SPEC §10 credit — while the two things that change at
+ * run time, the status caption and the progress fill, are real child widgets laid over it so the
+ * theme styles them like everything else and so neither can be clipped by the card edge.
  *
- * showFor() then runs the only animation the start-up path needs: fade in, hold while the
- * database opens and seeds, fade out, and hand control to the continuation main.cpp supplied.
+ * showFor() then runs the start-up choreography: fade in, sweep the progress fill across the
+ * budget it was given while the database opens and seeds, fade out, and hand control to the
+ * continuation main.cpp supplied.
  */
 
 #include "aluchop/gui/SplashScreen.hpp"
@@ -23,6 +25,7 @@
 #include <QColor>
 #include <QEasingCurve>
 #include <QFont>
+#include <QLabel>
 #include <QLinearGradient>
 #include <QPainter>
 #include <QPainterPath>
@@ -41,6 +44,15 @@ namespace {
 constexpr int kWidth = 560;    ///< Logical splash width in pixels.
 constexpr int kHeight = 360;   ///< Logical splash height in pixels.
 constexpr qreal kDpr = 2.0;    ///< Paint at 2x so the wordmark stays crisp on Retina panels.
+
+constexpr int kBarWidth = 200;       ///< Progress-bar track width; centred under the caption.
+constexpr int kBarHeight = 6;        ///< Must equal the min/max-height of `#splashProgress`.
+constexpr int kProgressSteps = 1000; ///< Fine enough that the fill grows smoothly, not in jumps.
+/// The fill the bar rests at before any choreography runs. It is not zero on purpose: a splash
+/// that is merely shown — during the very first paint, or by the screenshot tool, which never
+/// calls showFor() — must still read as a deliberate, round-capped, genuinely in-progress fill
+/// rather than as an empty groove with a stray dot at one end.
+constexpr int kProgressLead = 340;
 
 /// Draws the generated chef-hat mark centred in @p box, in @p colour.
 void paintMark(QPainter& painter, const QRectF& box, const QColor& colour) {
@@ -121,6 +133,9 @@ QPixmap buildArtwork() {
                      QStringLiteral("RESTAURANT MANAGEMENT SYSTEM"));
 
     // --- hairline rule --------------------------------------------------------------------
+    // Everything below this line is reserved for live widgets: the status caption, the busy bar
+    // and the credit block. Nothing is painted into 240..296 so the caption can never collide
+    // with artwork.
     painter.setPen(QPen(QColor(255, 255, 255, 60), 1));
     painter.drawLine(QPointF(kWidth / 2.0 - 110, 232), QPointF(kWidth / 2.0 + 110, 232));
 
@@ -156,13 +171,46 @@ SplashScreen::SplashScreen() : QSplashScreen(buildArtwork()) {
     setAttribute(Qt::WA_TranslucentBackground, true);
     setWindowFlag(Qt::FramelessWindowHint, true);
 
-    // The busy bar is a real child widget rather than painted artwork, so ThemeManager styles it
-    // (via `#splashProgress`) exactly like every other progress bar in the application.
+    // The status caption is a real child widget sitting in the band reserved for it, because
+    // QSplashScreen's own message painting puts the text 5 px from the very bottom edge — where
+    // it was being sliced by the card's rounded corner and running into the credit block.
+    auto* status = new QLabel(this);
+    status->setObjectName(QStringLiteral("splashStatus"));
+    status->setAlignment(Qt::AlignCenter);
+    status->setGeometry(36, 244, kWidth - 72, 22);
+
+    // The progress bar is a real child widget rather than painted artwork, so ThemeManager styles
+    // it (via `#splashProgress`) exactly like every other progress bar in the application.
+    //
+    // It is deliberately *determinate*. Qt's busy indicator (range 0..0) wraps its moving chunk
+    // around the ends of the groove, so at most moments it painted as two separate white slabs
+    // with the track showing between them — the leading one pill-capped, the trailing one sliced
+    // square where it ran off the track. A single fill that only ever grows has no wrap point, so
+    // both of its ends stay identically capped at every width, and the sweep is honest: showFor()
+    // is handed the start-up budget and animates the fill across exactly that.
     auto* bar = new QProgressBar(this);
     bar->setObjectName(QStringLiteral("splashProgress"));
-    bar->setRange(0, 0);            // indeterminate — start-up duration is genuinely unknown
+    bar->setRange(0, kProgressSteps);
+    bar->setValue(kProgressLead);
     bar->setTextVisible(false);
-    bar->setGeometry((kWidth - 220) / 2, 258, 220, 8);
+    bar->setGeometry((kWidth - kBarWidth) / 2, 278, kBarWidth, kBarHeight);
+
+    // showMessage() is not virtual and the header contract adds no override, so the inherited
+    // message is intercepted through the signal it already emits: the text is routed into the
+    // caption above and the base class's copy is cleared so it is never painted twice. Clearing
+    // re-emits the signal, which the echo flag swallows; an explicit clearMessage() from a caller
+    // still empties the caption.
+    connect(this, &QSplashScreen::messageChanged, this, [this, status](const QString& text) {
+        if (property("aluchopMessageEcho").toBool()) {
+            setProperty("aluchopMessageEcho", false);
+            return;
+        }
+        status->setText(text);
+        if (!text.isEmpty()) {
+            setProperty("aluchopMessageEcho", true);
+            QSplashScreen::clearMessage();
+        }
+    });
 }
 
 void SplashScreen::showFor(int ms, const std::function<void()>& then) {
@@ -180,6 +228,22 @@ void SplashScreen::showFor(int ms, const std::function<void()>& then) {
     fadeIn->setEndValue(1.0);
     fadeIn->setEasingCurve(QEasingCurve::InOutQuad);
     fadeIn->start(QAbstractAnimation::DeleteWhenStopped);
+
+    // The fill is animated across the same budget the caller gave the splash, so it reaches full
+    // exactly as the fade-out starts rather than stopping somewhere arbitrary. OutCubic front-loads
+    // the sweep the way real start-up work behaves: most of it lands early, the tail settles.
+    //
+    // QPropertyAnimation is driven from the unified timer's wall clock, so the long blocking spans
+    // in main.cpp (opening, migrating and seeding the database) do not desynchronise it — the fill
+    // simply resumes at the position the elapsed time says it should be at.
+    if (auto* bar = findChild<QProgressBar*>(QStringLiteral("splashProgress"))) {
+        auto* fill = new QPropertyAnimation(bar, "value", bar);
+        fill->setDuration(ms > 0 ? ms : 1);
+        fill->setStartValue(bar->value());   // continue from the resting fill, never snap back
+        fill->setEndValue(kProgressSteps);
+        fill->setEasingCurve(QEasingCurve::OutCubic);
+        fill->start(QAbstractAnimation::DeleteWhenStopped);
+    }
 
     QTimer::singleShot(ms > 0 ? ms : 0, this, [this, continuation]() {
         auto* fadeOut = new QPropertyAnimation(this, "windowOpacity", this);

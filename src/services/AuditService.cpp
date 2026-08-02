@@ -12,12 +12,16 @@
  *  - a failed **trail** write is fatal to the operation: it is written to `core::Logger`, mirrored
  *    with sequence 0 so the attempt itself is not lost, and then re-thrown with a bare `throw;`;
  *  - a failed **mirror** write is not: the evidence is already durable, so the SQL failure is
- *    logged and swallowed rather than aborting a business operation that genuinely succeeded.
+ *    reported rather than aborting a business operation that genuinely succeeded. Reported is not
+ *    the same as ignored — see reportMirrorFailure(): it is escalated to Level::Error, counted, and
+ *    also written to stderr, because `audit_log` is a table SPEC §4 requires and a silently
+ *    half-empty one is indistinguishable from a tampered one.
  */
 
 #include "aluchop/services/AuditService.hpp"
 
 #include <QDateTime>
+#include <QtGlobal>
 
 #include "aluchop/core/Exceptions.hpp"
 #include "aluchop/core/Logger.hpp"
@@ -40,6 +44,38 @@ void quietLog(core::Logger::Level level, const QString& message) {
     } catch (...) {
         // Deliberately empty: losing a log line is acceptable, losing the original exception is not.
     }
+}
+
+/**
+ * @brief Announces a failed `audit_log` mirror write on every channel available, without throwing.
+ *
+ * A mirror failure is deliberately *not* fatal — the binary trail already holds the evidence, and
+ * aborting a real business operation because a convenience index refused a row would be the wrong
+ * trade. But "not fatal" must never decay into "not noticed", which is exactly what happened while
+ * every `log(action, entity)` call was being rejected by the database: the only trace was a single
+ * Level::Warn line, and `audit_log` stayed empty while the application looked healthy.
+ *
+ * So the failure is reported three ways:
+ *  - at Level::Error, not Level::Warn — the operation succeeded but the audit *index* is now
+ *    provably incomplete, which is a failure, not an anomaly;
+ *  - with a running count, so a systematically broken mirror reads as a broken mirror rather than
+ *    as a string of unrelated hiccups;
+ *  - additionally on stderr via qCritical(), which still works when the failure is precisely that
+ *    `logs/aluchop.log` cannot be written either.
+ */
+void reportMirrorFailure(const QString& context, const QString& reason) {
+    /// Count of mirror rows lost in this process; single-threaded by the same contract as the DB.
+    static int s_mirrorFailures = 0;
+    ++s_mirrorFailures;
+
+    const QString message =
+        QStringLiteral("AUDIT MIRROR WRITE FAILED (failure #%1) for %2: %3 — the audit_log table is "
+                       "now incomplete; the binary trail remains authoritative")
+            .arg(s_mirrorFailures)
+            .arg(context, reason);
+
+    quietLog(core::Logger::Level::Error, message);
+    qCritical("%s", qUtf8Printable(message));
 }
 
 } // namespace
@@ -82,9 +118,9 @@ void AuditService::log(const QString& action, const QString& entity,
                             details.isEmpty() ? QStringLiteral("[trail write failed]")
                                               : details + QStringLiteral(" [trail write failed]"));
         } catch (const core::AluChopException& mirrorFailure) {
-            quietLog(core::Logger::Level::Error,
-                     QStringLiteral("audit mirror also FAILED: %1")
-                         .arg(QString::fromUtf8(mirrorFailure.what())));
+            reportMirrorFailure(QStringLiteral("%1/%2 (seq 0, trail had already failed)")
+                                    .arg(action, entity),
+                                QString::fromUtf8(mirrorFailure.what()));
         }
 
         /// @oop-concept Rethrow :: the failure is recorded and reported, then continues to
@@ -97,10 +133,11 @@ void AuditService::log(const QString& action, const QString& entity,
     try {
         m_mirror.insert(seq, tsUtcMs, m_activeUserId, action, entity, amount, details);
     } catch (const core::AluChopException& e) {
-        // The evidence is already on disk; the index is not worth aborting a real operation over.
-        quietLog(core::Logger::Level::Warn,
-                 QStringLiteral("audit mirror write failed for seq %1: %2")
-                     .arg(seq).arg(QString::fromUtf8(e.what())));
+        // The evidence is already on disk, so this is not worth aborting a real operation over —
+        // but it is loud, counted and on stderr, because an audit index that quietly stops
+        // accepting rows is the failure mode nobody discovers until they need the rows.
+        reportMirrorFailure(QStringLiteral("%1/%2 (seq %3)").arg(action, entity).arg(seq),
+                            QString::fromUtf8(e.what()));
     }
 }
 
@@ -135,8 +172,12 @@ std::size_t AuditService::trailRecordCount() {
     }
 }
 
-/// @oop-concept Random Access File IO :: one arbitrary 128-byte record fetched by index alone,
-/// surfaced all the way to the Reports screen as a record browser
+/// @oop-concept Random Access File IO :: one arbitrary 128-byte record fetched by index alone —
+/// seek to `index * 128`, read one record, no scan of the records before it.
+///
+/// This is the service-layer door onto that capability, and the only one the GUI layer is allowed
+/// to use (see the block comment above). What a screen builds on top of it — a record browser, a
+/// single spot-check, nothing at all — is that screen's decision, not a promise made here.
 persistence::AuditRecord AuditService::trailRecordAt(std::size_t index) {
     // Deliberately *not* caught: the header documents this as throwing, because asking for a
     // record that does not exist is a caller bug, and silently returning a zeroed record would

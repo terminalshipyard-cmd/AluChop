@@ -11,6 +11,7 @@
 
 #include "aluchop/gui/DashboardPage.hpp"
 
+#include <QAbstractScrollArea>
 #include <QDate>
 #include <QDateTime>
 #include <QEasingCurve>
@@ -37,6 +38,8 @@
 #include <QSizePolicy>
 #include <QString>
 #include <QStringList>
+#include <QStyle>
+#include <QStyleOptionViewItem>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTimer>
@@ -59,6 +62,7 @@
 #include <vector>
 
 #include "aluchop/core/Money.hpp"
+#include "aluchop/gui/ChartKit.hpp"
 #include "aluchop/gui/StatCard.hpp"
 #include "aluchop/gui/ThemeManager.hpp"
 #include "aluchop/gui/Widgets.hpp"
@@ -76,6 +80,20 @@ namespace {
 // Small presentation helpers. Colours are *always* taken from the live Palette
 // so that a theme switch repaints everything (SPEC §1).
 // ---------------------------------------------------------------------------
+
+/// Plot height, and the band the two list panels and the order table are allowed to occupy.
+/// They are sized to whole rows inside these bounds so nothing is ever sliced in half.
+///
+/// These numbers are a *budget*, not decoration. The screen is four panels in three bands, and at
+/// the shell's ordinary size the three bands plus their spacing have to add up to less than the
+/// viewport — otherwise the dashboard scrolls and its own live order board sits below the fold,
+/// which is the failure this pass exists to remove. A panel is ~88 px of heading, subtitle and
+/// padding around whichever of these heights it carries.
+constexpr int kChartHeight = 190;      ///< a *floor*; the plot then fills whatever its band gives it
+constexpr int kRowContentHeight = 30;  ///< minimum height of a list row's *content*
+constexpr int kListMinHeight = 165;
+constexpr int kListMaxHeight = 220;    ///< four whole rows — the alert feed's natural size
+constexpr int kTableMinHeight = 176;   ///< the 44 px header plus three whole 44 px rows
 
 /// Applies a point-size delta and a weight to a label and gives it a QSS object name.
 QLabel* styledLabel(const QString& text, const QString& objectName, QWidget* parent,
@@ -250,6 +268,22 @@ QWidget* listRow(const QString& lead, const QString& trail, const QColor& trailC
     return row;
 }
 
+/// @return the vertical space a list row loses to the stylesheet's own item padding and margin.
+///
+/// ThemeManager styles `QListWidget::item` with padding, and Qt places an item *widget* inside
+/// that padded rectangle. A row whose size hint is only as tall as its content therefore leaves
+/// the widget squeezed into what is left — 14 px of a 34 px row — and its text sliced through the
+/// middle. The live style is asked how much a row loses, so the answer follows the stylesheet
+/// instead of hardcoding a copy of it.
+int itemChromeHeight(const QListWidget* list) {
+    QStyleOptionViewItem option;
+    option.initFrom(list);
+    option.rect = QRect(0, 0, 300, 100);
+    const int text =
+        list->style()->subElementRect(QStyle::SE_ItemViewItemText, &option, list).height();
+    return std::max(0, 100 - text);
+}
+
 /// Adds a rich row (leading text + trailing value) to a list widget.
 void addRichRow(QListWidget* list, const QIcon& icon, const QString& lead, const QString& trail,
                 const QColor& trailColour) {
@@ -260,7 +294,10 @@ void addRichRow(QListWidget* list, const QIcon& icon, const QString& lead, const
         item->setIcon(icon);
         row->layout()->setContentsMargins(24, 4, 2, 4);
     }
-    item->setSizeHint(row->sizeHint().expandedTo(QSize(0, 34)));
+    // Content height plus the padding the row will be inset by — a row is never shorter than what
+    // it has to show.
+    const int content = std::max(row->sizeHint().height(), kRowContentHeight);
+    item->setSizeHint(QSize(0, content + itemChromeHeight(list)));
     list->setItemWidget(item, row);
 }
 
@@ -280,6 +317,11 @@ QTableWidgetItem* moneyCell(core::Money m) {
     return cell;
 }
 
+/// Object name of the count-up animations this screen installs on a card, so a new count-up
+/// replaces only its own predecessor. Stopping *every* QVariantAnimation on the tile — as this
+/// used to — also killed the card's entrance fade and rise, which are QVariantAnimations too.
+const QString kCountUpName = QStringLiteral("dashboardCountUp");
+
 /**
  * @brief Counts a number up from zero into a StatCard.
  *
@@ -291,20 +333,85 @@ QTableWidgetItem* moneyCell(core::Money m) {
 void countUp(StatCard* card, double target, const std::function<QString(double)>& format,
              int delayMs) {
     QTimer::singleShot(delayMs, card, [card, target, format]() {
-        const auto running = card->findChildren<QVariantAnimation*>();
-        for (auto* old : running) old->stop();  // DeleteWhenStopped disposes of them
+        if (auto* previous =
+                card->findChild<QVariantAnimation*>(kCountUpName, Qt::FindDirectChildrenOnly)) {
+            previous->setObjectName(QString());  // so it can never be found twice
+            previous->stop();                    // settles on its figure, then DeleteWhenStopped
+        }
+
+        // A refresh that lands on the number already displayed must not count it up again: the
+        // headline would spend the whole animation disagreeing with its own subtitle, which
+        // states the final figure immediately ("2" over "3 need reordering"). Stopping the
+        // previous count-up above has already settled the label, so an equal string means there
+        // is genuinely nothing to animate.
+        if (const auto* label = card->findChild<QLabel*>(QStringLiteral("statCardValue"))) {
+            if (label->text() == format(target)) {
+                return;
+            }
+        }
 
         auto* anim = new QVariantAnimation(card);
+        anim->setObjectName(kCountUpName);
         anim->setDuration(700);
         anim->setEasingCurve(QEasingCurve::OutCubic);
         anim->setStartValue(0.0);
         anim->setEndValue(target);
         QObject::connect(anim, &QVariantAnimation::valueChanged, card,
                          [card, format](const QVariant& v) { card->setValue(format(v.toDouble())); });
-        QObject::connect(anim, &QVariantAnimation::finished, card,
-                         [card, target, format]() { card->setValue(format(target)); });
+        // However the count-up ends — finished, or cancelled by the next refresh — the exact
+        // figure is what stays on the tile. A cancelled count-up used to freeze at whatever tick
+        // it had reached, which is how a card could read "2" while its own subtitle, built from
+        // the very same query, said "3 need reordering".
+        QObject::connect(anim, &QVariantAnimation::stateChanged, card,
+                         [card, target, format](QAbstractAnimation::State state,
+                                                QAbstractAnimation::State) {
+                             if (state == QAbstractAnimation::Stopped) {
+                                 card->setValue(format(target));
+                             }
+                         });
         anim->start(QAbstractAnimation::DeleteWhenStopped);
     });
+}
+
+/// The meaning a trend line carries. Neutral is the important one: a line that states a fact
+/// rather than a direction must not be painted in Palette::danger (SPEC §1 — red means a problem).
+enum class Tone { Positive, Neutral, Negative };
+
+/// Sets a card's trend line together with its tone. StatCard::setDelta reads the `deltaTone`
+/// dynamic property; see the comment there for why the tone cannot travel through its bool.
+void setTrendLine(StatCard* card, const QString& text, Tone tone) {
+    card->setProperty("deltaTone", tone == Tone::Positive   ? QStringLiteral("positive")
+                                   : tone == Tone::Negative ? QStringLiteral("negative")
+                                                            : QStringLiteral("neutral"));
+    card->setDelta(text, tone == Tone::Positive);
+}
+
+/// @return the height at which a row view shows only *whole* rows, never exceeding @p maxH.
+///
+/// A view whose height is not a whole number of rows slices its last row in half — that is the
+/// "clipped mid-height" look. Rows past @p maxH are reached by scrolling, with the last visible
+/// one still complete.
+int wholeRowsHeight(const std::vector<int>& rowHeights, int chromeH, int maxH) {
+    int height = chromeH;
+    for (int rowH : rowHeights) {
+        if (height + rowH > maxH) break;
+        height += rowH;
+    }
+    return height;
+}
+
+/// Pins a view to an exact height, so no surrounding stretch can squeeze it back into half a row.
+void pinHeight(QAbstractScrollArea* view, int height) {
+    view->setMinimumHeight(height);
+    view->setMaximumHeight(height);
+}
+
+/// @return the row heights of a list widget, in order.
+std::vector<int> listRowHeights(QListWidget* list) {
+    std::vector<int> heights;
+    heights.reserve(static_cast<std::size_t>(list->count()));
+    for (int i = 0; i < list->count(); ++i) heights.push_back(list->sizeHintForRow(i));
+    return heights;
 }
 
 /// Money formatter for the count-up (input is a paisa count).
@@ -359,8 +466,11 @@ DashboardPage::DashboardPage(services::AppContext& ctx, QWidget* parent) : Page(
     auto* body = new QWidget(scroll);
     body->setAutoFillBackground(false);
     auto* bodyColumn = new QVBoxLayout(body);
-    bodyColumn->setContentsMargins(0, 0, 4, 4);
-    bodyColumn->setSpacing(18);
+    // Every panel is a GlassPanel and paints a soft drop shadow *outside* its own rectangle, so
+    // the column needs a margin all round — otherwise the shadow of the last panel is shaved off
+    // by the viewport edge and the row reads as clipped.
+    bodyColumn->setContentsMargins(6, 4, 10, 8);
+    bodyColumn->setSpacing(16);
 
     // --- four headline metrics --------------------------------------------
     auto* statGrid = new CardGrid(230, body);
@@ -378,7 +488,14 @@ DashboardPage::DashboardPage(services::AppContext& ctx, QWidget* parent) : Page(
     }
     bodyColumn->addWidget(statGrid);
 
-    // --- revenue chart -----------------------------------------------------
+    // --- revenue chart beside the best sellers -----------------------------
+    // The chart used to be a full-width band 1300 px across carrying seven bars, which pushed the
+    // popular-items list, the alert list and the entire live order board below the fold. Landscape
+    // space is what this window has most of: pairing the chart with a list on each of two bands
+    // fills the width with information and lifts every panel above the fold.
+    auto* chartRow = new QHBoxLayout();
+    chartRow->setSpacing(16);
+
     QFrame* chartPanel = nullptr;
     QVBoxLayout* chartColumn = buildPanel(QStringLiteral("Revenue — last 7 days"),
                                           QStringLiteral("Settled payments only"), body,
@@ -387,44 +504,46 @@ DashboardPage::DashboardPage(services::AppContext& ctx, QWidget* parent) : Page(
     m_revenueChart->setObjectName(QStringLiteral("revenueChart"));
     m_revenueChart->setRenderHint(QPainter::Antialiasing, true);
     m_revenueChart->setFrameShape(QFrame::NoFrame);
-    m_revenueChart->setMinimumHeight(260);
+    // Tall enough that seven bars, their value axis and the day labels all get room; a shorter
+    // plot area is where axis labels start colliding with the bars.
+    m_revenueChart->setMinimumHeight(kChartHeight);
     m_revenueChart->setBackgroundBrush(Qt::NoBrush);
     m_revenueChart->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     chartColumn->addWidget(m_revenueChart, 1);
-    bodyColumn->addWidget(chartPanel);
 
-    // --- popular items + alerts, side by side and re-flowing ---------------
-    auto* panelGrid = new CardGrid(340, body);
+    // A week with no settled payments has nothing to plot: an axis grid with no bars reads as a
+    // broken chart, so the chart steps aside for a proper empty state of exactly the same height
+    // (the panel must not jump as the first payment arrives). Found later by object name, the way
+    // the subtitle already is, because the frozen header has no member to hold it.
+    auto* chartEmpty = new EmptyState(QStringLiteral("No revenue in the last 7 days"),
+                                      QStringLiteral("Settled payments appear here as soon as a "
+                                                     "bill is paid on the Orders screen."),
+                                      chartPanel);
+    chartEmpty->setMinimumHeight(kChartHeight);
+    chartEmpty->setVisible(false);
+    chartColumn->addWidget(chartEmpty, 1);
+
+    chartRow->addWidget(chartPanel, 3);
 
     QFrame* popularPanel = nullptr;
     QVBoxLayout* popularColumn = buildPanel(QStringLiteral("Popular Items"),
                                             QStringLiteral("Best sellers of the last 30 days"),
-                                            panelGrid, &popularPanel);
+                                            body, &popularPanel);
     m_popularItems = new QListWidget(popularPanel);
     m_popularItems->setObjectName(QStringLiteral("popularItems"));
     m_popularItems->setFrameShape(QFrame::NoFrame);
     m_popularItems->setSelectionMode(QAbstractItemView::NoSelection);
     m_popularItems->setFocusPolicy(Qt::NoFocus);
-    m_popularItems->setMinimumHeight(190);
+    m_popularItems->setMinimumHeight(kListMinHeight);
     popularColumn->addWidget(m_popularItems, 1);
-    panelGrid->addCard(popularPanel);
+    chartRow->addWidget(popularPanel, 2);
 
-    QFrame* alertPanel = nullptr;
-    QVBoxLayout* alertColumn = buildPanel(QStringLiteral("Alerts & Today's Book"),
-                                          QStringLiteral("Low stock, expiring goods and today's reservations"),
-                                          panelGrid, &alertPanel);
-    m_alerts = new QListWidget(alertPanel);
-    m_alerts->setObjectName(QStringLiteral("dashboardAlerts"));
-    m_alerts->setFrameShape(QFrame::NoFrame);
-    m_alerts->setSelectionMode(QAbstractItemView::NoSelection);
-    m_alerts->setFocusPolicy(Qt::NoFocus);
-    m_alerts->setMinimumHeight(190);
-    alertColumn->addWidget(m_alerts, 1);
-    panelGrid->addCard(alertPanel);
+    bodyColumn->addLayout(chartRow);
 
-    bodyColumn->addWidget(panelGrid);
+    // --- live order board beside the alert feed ----------------------------
+    auto* boardRow = new QHBoxLayout();
+    boardRow->setSpacing(16);
 
-    // --- live order board --------------------------------------------------
     QFrame* ordersPanel = nullptr;
     QVBoxLayout* ordersColumn = buildPanel(QStringLiteral("Live Orders"),
                                            QStringLiteral("Everything currently open on the floor and in the kitchen"),
@@ -434,14 +553,32 @@ DashboardPage::DashboardPage(services::AppContext& ctx, QWidget* parent) : Page(
                     QStringLiteral("Status"), QStringLiteral("Total")},
         ordersPanel);
     m_pendingOrders->setSortingEnabled(false);
-    m_pendingOrders->setMinimumHeight(210);
-    m_pendingOrders->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    m_pendingOrders->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_pendingOrders->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    m_pendingOrders->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
-    m_pendingOrders->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+    m_pendingOrders->setMinimumHeight(kTableMinHeight);
+    // The order number is what a waiter reads the row by, so it takes the slack and can never be
+    // elided; the four short columns take exactly the width their own contents need. Stretching
+    // "Status" instead — which is what this did — put the spare width in the middle of the row and
+    // left the identifier squeezed against the left edge.
+    m_pendingOrders->horizontalHeader()->setStretchLastSection(false);
+    m_pendingOrders->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    for (int c = 1; c < m_pendingOrders->columnCount(); ++c)
+        m_pendingOrders->horizontalHeader()->setSectionResizeMode(c, QHeaderView::ResizeToContents);
     ordersColumn->addWidget(m_pendingOrders, 1);
-    bodyColumn->addWidget(ordersPanel);
+    boardRow->addWidget(ordersPanel, 3);
+
+    QFrame* alertPanel = nullptr;
+    QVBoxLayout* alertColumn = buildPanel(QStringLiteral("Alerts & Today's Book"),
+                                          QStringLiteral("Low stock, expiring goods and today's reservations"),
+                                          body, &alertPanel);
+    m_alerts = new QListWidget(alertPanel);
+    m_alerts->setObjectName(QStringLiteral("dashboardAlerts"));
+    m_alerts->setFrameShape(QFrame::NoFrame);
+    m_alerts->setSelectionMode(QAbstractItemView::NoSelection);
+    m_alerts->setFocusPolicy(Qt::NoFocus);
+    m_alerts->setMinimumHeight(kListMinHeight);
+    alertColumn->addWidget(m_alerts, 1);
+    boardRow->addWidget(alertPanel, 2);
+
+    bodyColumn->addLayout(boardRow);
 
     bodyColumn->addStretch(1);
     scroll->setWidget(body);
@@ -452,7 +589,11 @@ DashboardPage::DashboardPage(services::AppContext& ctx, QWidget* parent) : Page(
     connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this,
             &DashboardPage::refresh);
 
-    refresh();
+    // Deliberately NOT calling refresh() here. Page's contract is that MainWindow refreshes a
+    // screen on first show, and MainWindow's constructor ends with onNavigate(kDashboard) — which
+    // does exactly that. Refreshing from the constructor as well ran every dashboard query twice
+    // on start-up and restarted the entrance animation mid-flight, one refresh over the top of
+    // the other. The page is built empty here and populated once, by its owner.
 }
 
 QString DashboardPage::pageTitle() const { return QStringLiteral("Dashboard"); }
@@ -463,6 +604,18 @@ QString DashboardPage::pageTitle() const { return QStringLiteral("Dashboard"); }
 
 void DashboardPage::refresh() {
     const Palette& pal = ThemeManager::instance().palette();
+
+    // ONE date for the whole screen, and it is the local one.
+    //
+    // services::ReportService's windowing contract is explicit: every QDate crossing it is a
+    // **local** calendar date, because a business day opens at local midnight — and it says in as
+    // many words that callers pass QDate::currentDate() and never
+    // QDateTime::currentDateTimeUtc().date(). This screen used to pass the UTC date, which in Nepal
+    // (UTC+05:45) is a *different date* for the first quarter of every day: the headline "Today's
+    // Sales", the seven-day chart and the "dddd, d MMMM yyyy" printed under the page title could
+    // each be describing a different day, and the tile could disagree with the Reports screen about
+    // the very same date. Reservations are a wall-clock booking calendar and were already local, so
+    // there is now a single `today` behind every figure here — no second date to drift against.
     const QDate today = QDate::currentDate();
 
     try {
@@ -470,11 +623,16 @@ void DashboardPage::refresh() {
         const core::Money todaySales = m_ctx.reports().salesForDay(today);
         const core::Money yesterdaySales = m_ctx.reports().salesForDay(today.addDays(-1));
         const std::array<core::Money, 7> week = m_ctx.reports().weeklySales(today);
-        const core::Money monthSales = m_ctx.reports().salesForMonth(today.year(), today.month());
+        const core::Money monthSales =
+            m_ctx.reports().salesForMonth(today.year(), today.month());
         const int pending = m_ctx.reports().pendingOrderCount();
         const int customers = m_ctx.reports().customerCount();
         const std::vector<models::Ingredient> low = m_ctx.inventory().lowStock();
         const std::vector<models::Ingredient> expiring = m_ctx.inventory().expiring(7);
+
+        // The headline number and its subtitle are the same figure from the same query, named
+        // once so they cannot drift apart ("2" over "3 need reordering").
+        const int lowCount = static_cast<int>(low.size());
 
         core::Money weekTotal;
         for (const core::Money& day : week) weekTotal += day;
@@ -482,28 +640,33 @@ void DashboardPage::refresh() {
         countUp(m_cards[0], static_cast<double>(todaySales.paisa()), formatPaisa, 0);
         countUp(m_cards[1], static_cast<double>(pending), formatCount, 80);
         countUp(m_cards[2], static_cast<double>(customers), formatCount, 160);
-        countUp(m_cards[3], static_cast<double>(low.size()), formatCount, 240);
+        countUp(m_cards[3], static_cast<double>(lowCount), formatCount, 240);
 
+        // Tones, not just up/down: "No sales recorded yet today" and "1 in the pipeline" state a
+        // fact and are muted; red is kept for the one line here that reports a real problem.
         if (yesterdaySales.isZero()) {
-            m_cards[0]->setDelta(todaySales.isZero()
-                                     ? QStringLiteral("No sales recorded yet today")
-                                     : QStringLiteral("First takings of the day"),
-                                 !todaySales.isZero());
+            setTrendLine(m_cards[0],
+                         todaySales.isZero() ? QStringLiteral("No sales recorded yet today")
+                                             : QStringLiteral("First takings of the day"),
+                         todaySales.isZero() ? Tone::Neutral : Tone::Positive);
         } else {
             const long long delta = todaySales.paisa() - yesterdaySales.paisa();
             const long long pct = (delta * 100) / yesterdaySales.paisa();
-            m_cards[0]->setDelta(QStringLiteral("%1%2% vs yesterday")
-                                     .arg(pct >= 0 ? QStringLiteral("+") : QString())
-                                     .arg(pct),
-                                 pct >= 0);
+            setTrendLine(m_cards[0],
+                         QStringLiteral("%1%2% vs yesterday")
+                             .arg(pct >= 0 ? QStringLiteral("+") : QString())
+                             .arg(pct),
+                         pct >= 0 ? Tone::Positive : Tone::Negative);
         }
-        m_cards[1]->setDelta(pending == 0 ? QStringLiteral("Kitchen is clear")
-                                          : QStringLiteral("%1 in the pipeline").arg(pending),
-                             pending == 0);
-        m_cards[2]->setDelta(QStringLiteral("Registered loyalty guests"), true);
-        m_cards[3]->setDelta(low.empty() ? QStringLiteral("Store room is healthy")
-                                         : QStringLiteral("%1 need reordering").arg(low.size()),
-                             low.empty());
+        setTrendLine(m_cards[1],
+                     pending == 0 ? QStringLiteral("Kitchen is clear")
+                                  : QStringLiteral("%1 in the pipeline").arg(pending),
+                     pending == 0 ? Tone::Positive : Tone::Neutral);
+        setTrendLine(m_cards[2], QStringLiteral("Registered loyalty guests"), Tone::Neutral);
+        setTrendLine(m_cards[3],
+                     lowCount == 0 ? QStringLiteral("Store room is healthy")
+                                   : QStringLiteral("%1 need reordering").arg(lowCount),
+                     lowCount == 0 ? Tone::Positive : Tone::Negative);
 
         // ---- seven-day revenue chart -------------------------------------
         auto* bars = new QBarSet(QStringLiteral("Revenue"));
@@ -526,29 +689,18 @@ void DashboardPage::refresh() {
         series->append(bars);
         series->setBarWidth(0.55);
 
-        auto* chart = new QChart();
+        // Surface, axes and — the point of the exercise — the *tick algorithm* all come from
+        // gui::chartkit, the one place that decides what an AluChop chart looks like. This screen
+        // used to scale its own axis straight off the data and print ticks like
+        // 0 · 2677 · 5354 · 8031 · 10709 while the Reports chart, two clicks away, rounded to
+        // 0 · 5000 · 10000 · 15000. Two tick algorithms in one product is exactly what makes
+        // software look unfinished, so there is now only one, and the empty-data fallback is
+        // shared with it too.
+        QChart* chart = chartkit::newChart(QMargins(0, 4, 4, 0), 450);
         chart->addSeries(series);
-        chart->legend()->hide();
-        chart->setBackgroundVisible(false);
-        chart->setPlotAreaBackgroundVisible(false);
-        chart->setMargins(QMargins(0, 4, 0, 0));
-        chart->setAnimationOptions(QChart::SeriesAnimations);
-        chart->setAnimationDuration(450);
 
-        auto* axisX = new QBarCategoryAxis();
-        axisX->append(dayLabels);
-        axisX->setLabelsColor(pal.textMuted);
-        axisX->setLineVisible(false);
-        axisX->setGridLineVisible(false);
-
-        auto* axisY = new QValueAxis();
-        axisY->setLabelFormat(QStringLiteral("%.0f"));
-        axisY->setTickCount(5);
-        axisY->setRange(0.0, maxRupees > 0.0 ? maxRupees * 1.18 : 100.0);
-        axisY->setLabelsColor(pal.textMuted);
-        axisY->setLineVisible(false);
-        axisY->setGridLineColor(pal.border);
-        axisY->setMinorGridLineVisible(false);
+        QBarCategoryAxis* axisX = chartkit::newCategoryAxis(dayLabels, pal);
+        QValueAxis* axisY = chartkit::newValueAxis(0.0, maxRupees, pal);
 
         chart->addAxis(axisX, Qt::AlignBottom);
         chart->addAxis(axisY, Qt::AlignLeft);
@@ -559,6 +711,16 @@ void DashboardPage::refresh() {
         m_revenueChart->setToolTip(QStringLiteral("This week %1  ·  This month %2")
                                        .arg(core::formatNpr(weekTotal),
                                             core::formatNpr(monthSales)));
+
+        // Nothing settled all week means there is no plot to draw — show the empty state in the
+        // chart's place rather than a bare, meaningless grid.
+        const bool hasRevenue = maxRupees > 0.0;
+        m_revenueChart->setVisible(hasRevenue);
+        if (auto* chartEmpty = m_revenueChart->parentWidget()->findChild<QFrame*>(
+                QStringLiteral("emptyState"), Qt::FindDirectChildrenOnly)) {
+            chartEmpty->setVisible(!hasRevenue);
+        }
+
         // The chart panel's only direct QLabel child carrying the "mutedLabel" name is its
         // subtitle line, so the weekly/monthly totals can be surfaced there without the page
         // having to keep another member pointer.
@@ -666,6 +828,37 @@ void DashboardPage::refresh() {
             m_pendingOrders->setItem(0, 0, empty);
             m_pendingOrders->setSpan(0, 0, 1, m_pendingOrders->columnCount());
             m_pendingOrders->setRowHeight(0, 88);
+        }
+
+        // ---- give every panel room for whole rows --------------------------
+        // Each list is sized to its *own* whole rows. They used to share one height, which was
+        // right when they sat side by side and had to read as a pair; now that they head two
+        // different bands, forcing the three-item best-seller list to the height of a five-item
+        // alert feed only bought 150 px of bare card under three rows — empty space beside a
+        // cramped neighbour, which is the exact fault this pass is here to remove.
+        {
+            const int listChrome = 2 * m_popularItems->frameWidth();
+            pinHeight(m_popularItems,
+                      std::max(kListMinHeight,
+                               wholeRowsHeight(listRowHeights(m_popularItems), listChrome,
+                                               kListMaxHeight)));
+            pinHeight(m_alerts,
+                      std::max(kListMinHeight,
+                               wholeRowsHeight(listRowHeights(m_alerts), listChrome,
+                                               kListMaxHeight)));
+
+            // The order board is *floored* at whole rows rather than pinned to them: it now shares
+            // a band with the alert list, and a maximum here would leave a strip of bare card under
+            // the table whenever the list beside it happens to be the taller of the two.
+            std::vector<int> orderRows;
+            orderRows.reserve(static_cast<std::size_t>(m_pendingOrders->rowCount()));
+            for (int r = 0; r < m_pendingOrders->rowCount(); ++r)
+                orderRows.push_back(m_pendingOrders->rowHeight(r));
+            const int tableChrome = 2 * m_pendingOrders->frameWidth() +
+                                    m_pendingOrders->horizontalHeader()->sizeHint().height();
+            m_pendingOrders->setMinimumHeight(
+                std::max(kTableMinHeight,
+                         wholeRowsHeight(orderRows, tableChrome, kListMaxHeight)));
         }
 
         animateCards();

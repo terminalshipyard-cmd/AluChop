@@ -32,7 +32,9 @@
 #include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMargins>
 #include <QMessageBox>
+#include <QModelIndex>
 #include <QHash>
 #include <QPainter>
 #include <QPainterPath>
@@ -42,6 +44,7 @@
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QRect>
+#include <QResizeEvent>
 #include <QSignalBlocker>
 #include <QSize>
 #include <QStackedWidget>
@@ -158,16 +161,32 @@ bool isFoodCategory(const QString& category) {
            category != QLatin1String("Shots") && category != QLatin1String("Dessert");
 }
 
+/// The logical edge length of a dish thumbnail — deliberately the table's icon size, so the
+/// pixmap is never rescaled (and therefore never softened) on its way to the cell.
+constexpr int kThumbSide = 44;
+
 /**
- * @brief A 48x48 rounded thumbnail for a dish.
+ * @brief A rounded thumbnail for a dish, rendered crisply for @p dpr.
  *
- * Photographs are optional on disk. When the file is missing the thumbnail is *generated* —
- * the category's initial on its own sage tint — so the table never shows a broken-image box.
- * Dietary markers are painted as small dots in the corner.
+ * Photographs are optional on disk, and most seeded dishes have none. Whenever the path is
+ * empty, missing, or fails to decode, the thumbnail is *generated* instead — the category's
+ * initial centred on that category's own stable sage tint — so a cell is never a broken-image
+ * box and never an empty hole.
+ *
+ * Markers are painted only when they *say* something: a green pip for a vegetarian dish, a red
+ * pip for a spicy one. The previous "contains meat" pip was drawn in Palette::secondary, which
+ * is the same sage family as the tint it sat on, so it read as a smudge rather than a marker.
+ *
+ * @param item the dish.
+ * @param pal the live palette (never a hard-coded colour).
+ * @param dpr the target device pixel ratio; the pixmap is rendered at that density and tagged
+ *            with it, so a Retina panel gets a sharp tile instead of an upscaled 1x one.
  */
-QPixmap thumbnailFor(const models::MenuItem& item, const Palette& pal) {
-    const int side = 48;
-    QPixmap pm(side, side);
+QPixmap thumbnailFor(const models::MenuItem& item, const Palette& pal, qreal dpr) {
+    const int side = kThumbSide;
+    const qreal ratio = dpr > 0.0 ? dpr : 1.0;
+    QPixmap pm(static_cast<int>(side * ratio), static_cast<int>(side * ratio));
+    pm.setDevicePixelRatio(ratio);  // everything below is drawn in logical pixels
     pm.fill(Qt::transparent);
 
     QPainter p(&pm);
@@ -175,46 +194,70 @@ QPixmap thumbnailFor(const models::MenuItem& item, const Palette& pal) {
     p.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
     QPainterPath clip;
-    clip.addRoundedRect(QRectF(0, 0, side, side), 12, 12);
+    clip.addRoundedRect(QRectF(0, 0, side, side), 11, 11);
     p.setClipPath(clip);
+
+    // Decided before anything is drawn: the initial is nudged up when a marker is going to sit in
+    // the bottom-right corner, so the two never read as one mangled two-glyph word.
+    const bool wantsVeg = isFoodCategory(item.category()) && looksVegetarian(item);
+    const bool wantsSpicy = isFoodCategory(item.category()) && looksSpicy(item);
+    const bool hasMarker = wantsVeg || wantsSpicy;
 
     bool painted = false;
     if (!item.imagePath().isEmpty() && QFile::exists(item.imagePath())) {
         QPixmap photo(item.imagePath());
         if (!photo.isNull()) {
-            photo = photo.scaled(side, side, Qt::KeepAspectRatioByExpanding,
-                                 Qt::SmoothTransformation);
-            p.drawPixmap((side - photo.width()) / 2, (side - photo.height()) / 2, photo);
+            photo.setDevicePixelRatio(1.0);
+            photo = photo.scaled(static_cast<int>(side * ratio), static_cast<int>(side * ratio),
+                                 Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+            photo.setDevicePixelRatio(ratio);
+            const qreal w = photo.width() / ratio;
+            const qreal h = photo.height() / ratio;
+            p.drawPixmap(QPointF((side - w) / 2.0, (side - h) / 2.0), photo);
             painted = true;
         }
     }
 
     if (!painted) {
+        // Generated placeholder — a tasteful tile, never a broken-image glyph.
         const QColor tint = categoryTint(item.category(), pal);
-        p.fillRect(0, 0, side, side, tint);
-        const QString initial = item.category().isEmpty()
-                                    ? QStringLiteral("?")
-                                    : item.category().left(1).toUpper();
+        p.fillRect(QRectF(0, 0, side, side), tint);
+        // Exactly one glyph, always. Two characters at this size collide with each other and with
+        // the dietary marker below, which is how "Pasta" came out as a capital P wearing a small
+        // dropped o — QString::left(1) is the guarantee, not a hope.
+        QString initial = item.category().left(1).toUpper();
+        if (initial.isEmpty()) initial = item.name().left(1).toUpper();
+        if (initial.isEmpty()) initial = QStringLiteral("?");
         QFont f = p.font();
-        f.setPointSize(18);
+        f.setPointSize(hasMarker ? 16 : 17);
         f.setWeight(QFont::DemiBold);
         p.setFont(f);
         p.setPen(pal.card);
-        p.drawText(QRect(0, 0, side, side), Qt::AlignCenter, initial);
+        // Centred on the tile, or on the space left above the markers when there are any.
+        p.drawText(QRectF(0, 0, side, hasMarker ? side - 9.0 : side), Qt::AlignCenter, initial);
     }
 
     p.setClipping(false);
-    if (isFoodCategory(item.category())) {
-        int x = side - 12;
-        if (looksSpicy(item)) {
-            p.setPen(QPen(pal.card, 1.5));
-            p.setBrush(pal.danger);
-            p.drawEllipse(QRect(x - 4, side - 12, 8, 8));
-            x -= 11;
-        }
-        p.setPen(QPen(pal.card, 1.5));
-        p.setBrush(looksVegetarian(item) ? pal.success : pal.secondary);
-        p.drawEllipse(QRect(x - 4, side - 12, 8, 8));
+    if (hasMarker) {
+        // Each pip sits on its own opaque card-coloured disc so it reads against a photograph and
+        // against every category tint alike. Small and pushed hard into the corner: at the old
+        // 11 px it sat under the initial's shoulder and read as a second letter rather than as a
+        // badge. Still clear of the 11 px corner radius, so nothing hangs off the tile.
+        constexpr qreal kDisc = 8.0;
+        constexpr qreal kPip = 4.5;
+        constexpr qreal kInset = 3.5;
+        qreal cx = side - kInset - kDisc / 2.0;
+        const qreal cy = side - kInset - kDisc / 2.0;
+        const auto pip = [&p, &cx, cy, &pal](const QColor& colour) {
+            p.setPen(Qt::NoPen);
+            p.setBrush(pal.card);
+            p.drawEllipse(QPointF(cx, cy), kDisc / 2.0, kDisc / 2.0);
+            p.setBrush(colour);
+            p.drawEllipse(QPointF(cx, cy), kPip / 2.0, kPip / 2.0);
+            cx -= kDisc + 2.5;
+        };
+        if (wantsVeg) pip(pal.success);
+        if (wantsSpicy) pip(pal.danger);
     }
     p.end();
     return pm;
@@ -420,7 +463,7 @@ void runQuery(services::AppContext& ctx, QWidget* page, QLineEdit* search, QComb
         table->insertRow(row);
 
         auto* nameCell = new QTableWidgetItem(item.name());
-        nameCell->setIcon(QIcon(thumbnailFor(item, pal)));
+        nameCell->setIcon(QIcon(thumbnailFor(item, pal, table->devicePixelRatioF())));
         nameCell->setData(kItemIdRole, item.id());
         nameCell->setData(kAvailableRole, item.isAvailable());
         QFont nf = nameCell->font();
@@ -467,6 +510,50 @@ void runQuery(services::AppContext& ctx, QWidget* page, QLineEdit* search, QComb
     }
     if (stack) stack->setCurrentIndex(items.empty() ? 1 : 0);
 }
+
+/**
+ * @brief The menu table, with a viewport that is always a whole number of rows tall.
+ *
+ * 126 dishes never fit on one screen, and a listing that ends in a row sliced through the middle
+ * reads as broken rather than as scrollable. The leftover pixels are parked in the bottom margin
+ * instead, so the last visible dish is always a complete one.
+ *
+ * @oop-concept Multilevel Inheritance :: QTableWidget → ElegantTable (the house table style)
+ *              → this screen's whole-row refinement; each level adds exactly one idea
+ */
+class WholeRowTable : public ElegantTable {
+public:
+    /// @param headers column captions.
+    /// @param parent owning widget.
+    explicit WholeRowTable(const QStringList& headers, QWidget* parent = nullptr)
+        : ElegantTable(headers, parent) {}
+
+protected:
+    void resizeEvent(QResizeEvent* event) override {
+        ElegantTable::resizeEvent(event);
+        snapToWholeRows();
+    }
+
+    void rowsInserted(const QModelIndex& parent, int start, int end) override {
+        QTableView::rowsInserted(parent, start, end);
+        snapToWholeRows();
+    }
+
+private:
+    /// Parks the remainder of the division in the bottom margin.
+    ///
+    /// @note The left/top/right margins are read back and preserved, never assumed: QTableView
+    ///       stores its own header sizes there, and overwriting them would push the column
+    ///       header on top of the first row. Only the bottom is ours.
+    void snapToWholeRows() {
+        const QMargins margins = viewportMargins();
+        const int step = verticalHeader()->defaultSectionSize();
+        const int wanted =
+            (step > 0 && rowCount() > 0) ? (viewport()->height() + margins.bottom()) % step : 0;
+        if (wanted == margins.bottom()) return;
+        setViewportMargins(margins.left(), margins.top(), margins.right(), wanted);
+    }
+};
 
 /// A short, subtle fade used when the whole screen reloads.
 void fadeIn(QWidget* target, int durationMs = 180) {
@@ -580,15 +667,24 @@ MenuPage::MenuPage(services::AppContext& ctx, QWidget* parent) : Page(ctx, paren
     auto* stack = new QStackedWidget(resultsPanel);
     stack->setObjectName(QStringLiteral("menuStack"));
 
-    m_table = new ElegantTable(
+    m_table = new WholeRowTable(
         QStringList{QStringLiteral("Dish"), QStringLiteral("Section"), QStringLiteral("Price"),
                     QStringLiteral("Status"), QStringLiteral("Description")},
         stack);
     m_table->setSortingEnabled(false);  // the service owns the ordering, not the header
-    m_table->setIconSize(QSize(44, 44));
-    m_table->verticalHeader()->setDefaultSectionSize(60);
-    m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Interactive);
-    m_table->horizontalHeader()->resizeSection(0, 300);
+    m_table->setIconSize(QSize(kThumbSide, kThumbSide));
+    m_table->verticalHeader()->setDefaultSectionSize(62);
+    // The vertical header is hidden, so the corner button would only ever be a bare grey square
+    // in the bottom-right corner that reads as a stray checkbox.
+    m_table->setCornerButtonEnabled(false);
+    m_table->setTextElideMode(Qt::ElideRight);
+    m_table->horizontalHeader()->setMinimumSectionSize(72);
+    // The dish name is the primary identifier of this screen, so it shares the slack with the
+    // description rather than being pinned to a fixed 320 px while the description sprawled.
+    // A truncated "AluChop Signature Sushi Platter (16 …" next to a description with room to
+    // spare is exactly the wrong way round: a description is the column that can afford to end
+    // in an ellipsis (and the full text is one hover away).
+    m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);

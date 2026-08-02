@@ -13,6 +13,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QMetaType>
 #include <QSqlError>
 #include <QStringList>
 #include <QVariant>
@@ -45,6 +46,50 @@ struct DepthGuard {
 private:
     int& m_counter;
 };
+
+/**
+ * @brief Turns a *null* QString bind into an empty-but-non-null one, and leaves every other bind
+ *        exactly as the caller wrote it.
+ *
+ * QVariant has two different flavours of "nothing" where SQL has only one, and telling them apart
+ * is the whole point of this function:
+ *
+ *  - `QVariant()` — **invalid**: no value of any type. This is the deliberate SQL NULL. Every
+ *    `fkOrNull()` / `dateOrNull()` helper in this layer returns precisely this to say
+ *    "no linked row" / "does not expire" on a *nullable* column.
+ *  - `QVariant(QString())` — **valid, but holding a null QString**. In ordinary C++ this is
+ *    indistinguishable from `QVariant(QString(""))`: `==` says they are equal and `toString()`
+ *    yields nothing in both cases. Qt's SQL layer, however, does distinguish them —
+ *    `QSqlResultPrivate::isVariantNull()` explicitly special-cases `QString::isNull()` — so QSQLITE
+ *    calls `sqlite3_bind_null()` for the null one and binds the text `''` for the empty one.
+ *
+ * That distinction is fatal here, because a default-constructed QString is *null*, not empty:
+ * `Order::note()` on a brand-new order, `Reservation::specialRequest()` on a walk-in booking, the
+ * literal `QString()` AuthService passes for "remember-me is off", the defaulted `note` argument of
+ * `IngredientRepository::adjustStock`, the defaulted `details` argument of `AuditService::log`.
+ * All of those land on columns declared `TEXT NOT NULL DEFAULT ''` — and a column DEFAULT applies
+ * only when the column is **omitted** from an INSERT. It never rescues an explicitly bound NULL,
+ * and it does nothing at all for an UPDATE. So the statement is rejected with
+ * `NOT NULL constraint failed`, which is what made login, order creation and reservation booking
+ * impossible.
+ *
+ * The rewrite is deliberately narrow: **only** the QString-typed-but-null case. An invalid QVariant
+ * still binds as a genuine SQL NULL, so `users.employee_id`, `ingredients.expiry_date`,
+ * `orders.table_id`, `orders.merged_into` and friends keep meaning exactly what their callers
+ * intend. Blanket-converting every "null" QVariant would silently break those nullable columns.
+ *
+ * It lives here, at the single chokepoint every repository funnels its binds through, so that no
+ * present or future call site can reintroduce the bug by forgetting a `QString("")`.
+ */
+QVariant normalisedBind(const QVariant& value)
+{
+    if (value.typeId() == QMetaType::QString && value.toString().isNull()) {
+        // fromLatin1("") gives a shared-empty QString: size 0 but a non-null data pointer, so
+        // isNull() is false and the driver binds it as the text '' rather than as SQL NULL.
+        return QVariant(QString::fromLatin1(""));
+    }
+    return value;
+}
 
 /// @brief Folds a QSqlError into the message/context/code triple carried by DatabaseException.
 [[noreturn]] void throwSqlError(const QString& what, const QSqlError& error, const QString& context)
@@ -169,7 +214,9 @@ QSqlQuery Database::prepared(const QString& sql, const QVariantList& binds)
         throwSqlError(QStringLiteral("cannot prepare statement"), query.lastError(), sql);
     }
     for (const QVariant& value : binds) {
-        query.addBindValue(value);
+        // Never bind `binds` straight through: see normalisedBind() for why a null QString would
+        // otherwise reach a NOT NULL column as SQL NULL.
+        query.addBindValue(normalisedBind(value));
     }
     if (!query.exec()) {
         throwSqlError(QStringLiteral("prepared statement failed"), query.lastError(), sql);

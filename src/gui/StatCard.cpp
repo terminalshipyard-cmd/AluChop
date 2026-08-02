@@ -10,6 +10,13 @@
  * widget" rule, and neither one fights the layout: the rise is expressed as an animated top
  * content margin, so the layout stays authoritative about geometry at every frame.
  *
+ * @par Animation lifetime
+ * The opacity effect and the two entrance animations are created **once** and belong to the card
+ * for as long as it lives; animateIn() rewinds them rather than replacing them, so calling it
+ * again mid-flight (the dashboard does, on every refresh) simply replays the entrance. Nothing an
+ * animation points at is ever deleted underneath it — see entranceEffect() for why that used to
+ * be fatal.
+ *
  * The tile never formats money itself — the dashboard passes a string already produced by
  * core::formatNpr, and the count-up simply re-renders the numeric part of it. It also knows when
  * to stay out of the way: a screen that animates the value itself (DashboardPage does, so it can
@@ -134,6 +141,15 @@ bool splitNumber(const QString& text, QString& prefix, double& value, int& decim
 const QString kCountUpName = QStringLiteral("statCardCountUp");
 const QString kFadeInName = QStringLiteral("statCardFadeIn");
 const QString kRiseName = QStringLiteral("statCardRise");
+/// The single opacity effect a card keeps for its whole life, and the one pending-entrance timer.
+const QString kFadeEffectName = QStringLiteral("statCardFadeEffect");
+const QString kEntranceDelayName = QStringLiteral("statCardEntranceDelay");
+
+/// Card padding (SPEC §1 "generous whitespace"), the entrance lift and its duration.
+constexpr int kPadX = 18;
+constexpr int kPadY = 16;
+constexpr int kRisePx = 12;
+constexpr int kEntranceMs = 320;
 
 /// Milliseconds below which two consecutive setValue() calls must be a caller animating the card.
 constexpr qint64 kDrivenWindowMs = 150;
@@ -161,6 +177,74 @@ bool isDrivenFromOutside(StatCard* card) {
     return previous != 0 && (now - previous) < kDrivenWindowMs;
 }
 
+/// @return the card's opacity effect, created on first use and then kept for the card's lifetime.
+///
+/// The lifetime rule *is* the fix. The previous implementation installed a **new**
+/// QGraphicsOpacityEffect on every animateIn(); QWidget::setGraphicsEffect() deletes the effect
+/// that was there before, and the still-running animation — plus a lambda that had captured that
+/// effect by raw pointer — then wrote to freed memory the instant it was stopped. That is a hard
+/// SIGSEGV on every start-up, because the dashboard refreshes twice while the first entrance is
+/// still in flight. One effect per card, created lazily and never replaced, removes the dangling
+/// reference at its source instead of trying to guard against it.
+QGraphicsOpacityEffect* entranceEffect(StatCard* card) {
+    auto* fade = qobject_cast<QGraphicsOpacityEffect*>(card->graphicsEffect());
+    if (!fade) {
+        fade = new QGraphicsOpacityEffect(card);
+        fade->setObjectName(kFadeEffectName);
+        // Transparent from the moment the effect exists, so a staggered card waits out its delay
+        // off-screen instead of appearing, vanishing and fading back in. On later entrances the
+        // effect is already settled (opaque and disabled) and the card simply stays visible until
+        // its turn comes round.
+        fade->setOpacity(0.0);
+        card->setGraphicsEffect(fade);   // the card owns it from here on
+    }
+    return fade;
+}
+
+/// Snaps the card to its settled opacity, however the fade ended — finished, cancelled, or
+/// restarted by another refresh — so a tile can never be left half-transparent.
+void settleOpacity(StatCard* card) {
+    if (auto* fade = qobject_cast<QGraphicsOpacityEffect*>(card->graphicsEffect())) {
+        fade->setOpacity(1.0);
+        // A live QGraphicsEffect pushes the widget through an offscreen buffer on every repaint,
+        // which also costs the text its subpixel antialiasing. The card only needs that while it
+        // is actually fading, so the effect is switched *off* once it has arrived — never deleted,
+        // because deleting it is what used to crash.
+        fade->setEnabled(false);
+    }
+}
+
+/// Restores the card's design padding after the 12 px rise, however that animation ended.
+void settleMargins(StatCard* card) {
+    if (QLayout* box = card->layout()) {
+        box->setContentsMargins(kPadX, kPadY, kPadX, kPadY);
+    }
+}
+
+/// (Re)starts the entrance immediately.
+///
+/// Safe to call while a previous entrance is still running: both animations are long-lived
+/// children of the card, so a second call rewinds them instead of destroying and re-creating
+/// anything. That makes animateIn() idempotent — the second refresh a start-up performs replays
+/// the entrance rather than racing it.
+void runEntrance(StatCard* card) {
+    auto* fadeAnim = card->findChild<QPropertyAnimation*>(kFadeInName, Qt::FindDirectChildrenOnly);
+    auto* riseAnim = card->findChild<QVariantAnimation*>(kRiseName, Qt::FindDirectChildrenOnly);
+    if (!fadeAnim || !riseAnim) {
+        return;
+    }
+
+    fadeAnim->stop();   // both settle through their stateChanged handlers
+    riseAnim->stop();
+
+    if (auto* fade = qobject_cast<QGraphicsOpacityEffect*>(card->graphicsEffect())) {
+        fade->setEnabled(true);
+        fade->setOpacity(0.0);
+    }
+    fadeAnim->start();
+    riseAnim->start();
+}
+
 } // namespace
 
 /// @oop-concept Parameterised Constructor :: a card without a caption and a mark is meaningless,
@@ -172,7 +256,7 @@ StatCard::StatCard(const QString& title, const QString& iconSvgPath, QWidget* pa
     setMinimumHeight(126);
 
     auto* column = new QVBoxLayout(this);
-    column->setContentsMargins(18, 16, 18, 16);
+    column->setContentsMargins(kPadX, kPadY, kPadX, kPadY);
     column->setSpacing(4);
 
     // --- header row: caption on the left, tinted glyph on the right ---------------------
@@ -271,9 +355,26 @@ void StatCard::setDelta(const QString& delta, bool positive) {
     m_delta->setText(delta);
     m_delta->setVisible(!delta.isEmpty());
 
+    // Three tones, not two. A trend line is sometimes a *fact* rather than a direction — "1 in the
+    // pipeline", "No sales recorded yet today" — and painting those in Palette::danger cries wolf:
+    // red has to mean something is actually wrong. The frozen header can only carry a bool, so the
+    // third, neutral tone arrives as the dynamic property `deltaTone` ("positive" / "neutral" /
+    // "negative"), which is the very mechanism the stylesheet already reads `trend` through. A
+    // neutral line gets no [trend] rule at all and so falls through to #statCardDelta's muted
+    // default. With no property set, the bool decides exactly as before.
+    const QString tone = property("deltaTone").toString();
+    QString trend = positive ? QStringLiteral("up") : QStringLiteral("down");
+    if (tone == QLatin1String("neutral")) {
+        trend = QStringLiteral("flat");
+    } else if (tone == QLatin1String("positive")) {
+        trend = QStringLiteral("up");
+    } else if (tone == QLatin1String("negative")) {
+        trend = QStringLiteral("down");
+    }
+
     // The colour is a stylesheet decision, not a widget decision: the tile only states the
     // direction and lets ThemeManager's `#statCardDelta[trend="up"]` rule pick the green.
-    m_delta->setProperty("trend", positive ? QStringLiteral("up") : QStringLiteral("down"));
+    m_delta->setProperty("trend", trend);
     m_delta->style()->unpolish(m_delta);
     m_delta->style()->polish(m_delta);
 }
@@ -281,70 +382,74 @@ void StatCard::setDelta(const QString& delta, bool positive) {
 /// @oop-concept Default Arguments :: a lone card animates immediately; the dashboard staggers
 /// its four tiles by passing 0 / 80 / 160 / 240 ms
 void StatCard::animateIn(int delayMs) {
-    auto* fade = new QGraphicsOpacityEffect(this);
-    fade->setOpacity(0.0);
-    setGraphicsEffect(fade); // Qt owns it and deletes any previous effect
+    QGraphicsOpacityEffect* fade = entranceEffect(this);
 
-    // Parented to the card's *container*, not to the card. A screen is entitled to stop every
-    // animation it finds on a tile before starting its own value animation (DashboardPage does
-    // exactly that), and QPropertyAnimation IS-A QVariantAnimation, so an entrance animation
-    // parented to the card would be swept away by that perfectly reasonable housekeeping. The
-    // animation's target stays the card's own effect, and Qt guards a destroyed target, so the
-    // lifetime is still safe either way.
-    QObject* animationHost = parentWidget() ? static_cast<QObject*>(parentWidget())
-                                            : static_cast<QObject*>(this);
+    // Both animations are children of the *card* and are built exactly once. Parenting them to
+    // the containing grid, as this used to do, let an animation outlive the effect it drives;
+    // owning them here ties animation, effect and card to one lifetime. The card's animations are
+    // named, and DashboardPage's count-up now stops only its own, so nothing sweeps these away.
+    if (auto* stale = findChild<QPropertyAnimation*>(kFadeInName, Qt::FindDirectChildrenOnly);
+        stale && stale->targetObject() != fade) {
+        stale->stop();
+        delete stale;   // this card owns it outright — no DeleteWhenStopped policy in play
+    }
 
-    auto* opacity = new QPropertyAnimation(fade, "opacity", animationHost);
-    opacity->setObjectName(kFadeInName);
-    opacity->setDuration(320);
-    opacity->setStartValue(0.0);
-    opacity->setEndValue(1.0);
-    opacity->setEasingCurve(QEasingCurve::InOutQuad);
-
-    // Safety net. QPropertyAnimation IS-A QVariantAnimation, and a screen that stops every
-    // animation on a card (DashboardPage does exactly that before it starts its own count-up)
-    // could otherwise leave this tile frozen half-faded. Whenever the animation stops — finished
-    // or cancelled — the card snaps to its settled appearance.
-    connect(opacity, &QPropertyAnimation::stateChanged, this,
-            [fade](QAbstractAnimation::State state, QAbstractAnimation::State) {
-                if (state == QAbstractAnimation::Stopped) {
-                    fade->setOpacity(1.0);
-                }
-            });
+    if (!findChild<QPropertyAnimation*>(kFadeInName, Qt::FindDirectChildrenOnly)) {
+        auto* opacity = new QPropertyAnimation(fade, "opacity", this);
+        opacity->setObjectName(kFadeInName);
+        opacity->setDuration(kEntranceMs);
+        opacity->setStartValue(0.0);
+        opacity->setEndValue(1.0);
+        opacity->setEasingCurve(QEasingCurve::InOutQuad);
+        // The handler looks the effect up through the card rather than capturing it, so there is
+        // nothing here that can point at something already destroyed.
+        connect(opacity, &QPropertyAnimation::stateChanged, this,
+                [this](QAbstractAnimation::State state, QAbstractAnimation::State) {
+                    if (state == QAbstractAnimation::Stopped) {
+                        settleOpacity(this);
+                    }
+                });
+    }
 
     // The 12 px "rise" is applied as a shrinking top margin rather than by moving the widget:
     // moving a layout-managed widget is undone by the next layout pass, whereas a margin IS the
     // layout, so the motion is stable no matter what else resizes.
-    auto* rise = new QVariantAnimation(animationHost);
-    rise->setObjectName(kRiseName);
-    rise->setStartValue(12);
-    rise->setEndValue(0);
-    rise->setDuration(320);
-    rise->setEasingCurve(QEasingCurve::OutCubic);
-    connect(rise, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
-        const int lift = v.toInt();
-        if (QLayout* box = layout()) {
-            box->setContentsMargins(18, 16 + lift, 18, 16 - lift);
-        }
-    });
-    connect(rise, &QVariantAnimation::stateChanged, this,
-            [this](QAbstractAnimation::State state, QAbstractAnimation::State) {
-                if (state == QAbstractAnimation::Stopped) {
-                    if (QLayout* box = layout()) {
-                        box->setContentsMargins(18, 16, 18, 16);   // settle, however it ended
+    if (!findChild<QVariantAnimation*>(kRiseName, Qt::FindDirectChildrenOnly)) {
+        auto* rise = new QVariantAnimation(this);
+        rise->setObjectName(kRiseName);
+        rise->setStartValue(kRisePx);
+        rise->setEndValue(0);
+        rise->setDuration(kEntranceMs);
+        rise->setEasingCurve(QEasingCurve::OutCubic);
+        connect(rise, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) {
+            const int lift = v.toInt();
+            if (QLayout* box = layout()) {
+                box->setContentsMargins(kPadX, kPadY + lift, kPadX, kPadY - lift);
+            }
+        });
+        connect(rise, &QVariantAnimation::stateChanged, this,
+                [this](QAbstractAnimation::State state, QAbstractAnimation::State) {
+                    if (state == QAbstractAnimation::Stopped) {
+                        settleMargins(this);   // settle, however it ended
                     }
-                }
-            });
+                });
+    }
 
-    const auto launch = [opacity, rise]() {
-        opacity->start(QAbstractAnimation::DeleteWhenStopped);
-        rise->start(QAbstractAnimation::DeleteWhenStopped);
-    };
+    // One pending launch per card. A second animateIn() arriving while the first is still waiting
+    // out its stagger rewinds the timer instead of queueing a second, competing entrance.
+    auto* delay = findChild<QTimer*>(kEntranceDelayName, Qt::FindDirectChildrenOnly);
+    if (!delay) {
+        delay = new QTimer(this);
+        delay->setObjectName(kEntranceDelayName);
+        delay->setSingleShot(true);
+        connect(delay, &QTimer::timeout, this, [this]() { runEntrance(this); });
+    }
 
     if (delayMs > 0) {
-        QTimer::singleShot(delayMs, this, launch);
+        delay->start(delayMs);
     } else {
-        launch();
+        delay->stop();
+        runEntrance(this);
     }
 }
 
